@@ -1,0 +1,37 @@
+{
+  "name": "promise-cacher",
+  "version": "1.0.0",
+  "description": "promise-cacher is a library that supports asynchronous memory caching.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "scripts": {
+    "coverage": "jest --coverage",
+    "prepublishOnly": "rm -rf dist && tsc"
+  },
+  "repository": "https://github.com/EJayCheng/promise-cacher",
+  "author": "EJay Cheng",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^24.9.1",
+    "@types/node": "^11.15.54",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.3.0",
+    "typescript": "^4.3.3"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "jest": {
+    "transform": {
+      ".(ts|tsx)": "<rootDir>/node_modules/ts-jest/preprocessor.js"
+    },
+    "testRegex": "(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$",
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ]
+  }
+}
