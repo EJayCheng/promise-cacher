@@ -2,7 +2,7 @@ import * as md5 from "md5";
 
 export function cacheKeyTransformDefaultFn<INPUT = any>(input: INPUT): string {
   if (typeof input === "string") {
-    return input.length > 32 ? md5(input) : input;
+    return input.length > 32 || input.length === 0 ? md5(input) : input;
   } else if (
     typeof input === "number" ||
     typeof input === "bigint" ||

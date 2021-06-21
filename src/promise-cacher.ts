@@ -7,19 +7,19 @@ import {
 } from "./define";
 import { cacheKeyTransformDefaultFn } from "./util/cache-key-transform";
 import { sizeFormat } from "./util/sizeof";
-const DefaultFlushInterval = 1 * 60 * 1000;
-const MinFlushInterval = 1 * 1000;
-const DefaultMaxMemoryByte = 200 * 1024 * 1024;
-const DefaultCacheMillisecond = 1 * 60 * 1000;
+const DefaultFlushInterval = 1 * 60 * 1000; // 1 min
+const MinFlushInterval = 1 * 1000; // 1 sec
+const DefaultMaxMemoryByte = 10 * 1024 * 1024; // 10 MB
+const DefaultCacheMillisecond = 1 * 60 * 1000; // 5 min
 export class PromiseCacher<OUTPUT = any, INPUT = any> {
   private taskMap = new Map<string, CacheTask<OUTPUT, INPUT>>();
-  public overMemoryLimitCount: number = 0;
-  public usedCount: number = 0;
-  public releasedMemoryBytes: number = 0;
+  private overMemoryLimitCount: number = 0;
+  private usedCount: number = 0;
+  private releasedMemoryBytes: number = 0;
   private timer: any;
   public constructor(
     public fetchFn: FetchByKeyMethod<OUTPUT, INPUT>,
-    public config: CacherConfig<OUTPUT, INPUT> = {}
+    public config: CacherConfig = {}
   ) {}
 
   private get maxMemoryMegaByte(): number {

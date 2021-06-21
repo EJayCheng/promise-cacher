@@ -1,13 +1,14 @@
 {
   "name": "promise-cacher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "promise-cacher is a library that supports asynchronous memory caching.",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "typings": "dist/index.d.ts",
   "scripts": {
-    "coverage": "jest --coverage",
-    "prepublishOnly": "rm -rf dist && tsc"
+    "prepublish": "rm -rf dist & tsc",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "repository": "https://github.com/EJayCheng/promise-cacher",
   "author": "EJay Cheng",
