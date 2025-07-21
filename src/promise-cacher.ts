@@ -34,25 +34,27 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   /** Map storing all active cache tasks, keyed by transformed cache keys */
   private taskMap = new Map<string, CacheTask<OUTPUT, INPUT>>();
 
-  /** Counter tracking how many times memory limit was exceeded */
-  private overMemoryLimitCount: number = 0;
-
-  /** Total number of cache access attempts */
-  private usedCount: number = 0;
-
-  /** Total bytes of memory released through cache cleanup */
-  private releasedMemoryBytes: number = 0;
-
   /** Timer handle for periodic cache cleanup operations */
   private timer: ReturnType<typeof setInterval>;
 
-  /** Performance tracking */
+  /** Performance and usage tracking */
   private performanceMetrics = {
+    /** Array storing response times in milliseconds for calculating performance statistics */
     responseTimes: [] as number[],
+    /** Total number of fetch operations executed (including both cache hits and misses) */
     totalFetchCount: 0,
+    /** Number of concurrent requests currently being processed */
     currentConcurrentRequests: 0,
+    /** Maximum number of concurrent requests reached during the lifecycle */
     maxConcurrentRequestsReached: 0,
+    /** Number of requests that were rejected due to system constraints */
     rejectedRequestsCount: 0,
+    /** Counter tracking how many times memory usage exceeded the configured limit */
+    overMemoryLimitCount: 0,
+    /** Total number of cache access attempts (get method calls) */
+    usedCount: 0,
+    /** Total bytes of memory released through cache cleanup operations */
+    releasedMemoryBytes: 0,
   };
 
   /** Set to track currently running concurrent requests */
@@ -61,8 +63,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   /** Queue for managing pending requests when concurrent limit is reached */
   private requestQueue = new RequestQueue<INPUT, OUTPUT>();
 
-  /** Cached configuration values for performance optimization */
-  private readonly configCache: {
+  /** Pre-computed configuration values for optimal performance */
+  private readonly computedConfig: {
     maxMemoryByte: number;
     minMemoryByte: number;
     flushInterval: number;
@@ -80,29 +82,78 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     public fetchFn: FetchByKeyMethod<OUTPUT, INPUT>,
     public config: CacherConfig = {},
   ) {
-    // Pre-calculate frequently used config values for better performance
+    this.computedConfig = this.computeOptimizedConfig();
+  }
+
+  /**
+   * Computes and optimizes configuration values for better performance.
+   * Pre-calculates frequently used config values to avoid repeated computations.
+   *
+   * @returns Pre-computed configuration object with optimized values
+   */
+  private computeOptimizedConfig() {
+    const memoryConfig = this.computeMemoryConfiguration();
+    const timingConfig = this.computeTimingConfiguration();
+
+    return {
+      ...memoryConfig,
+      ...timingConfig,
+    };
+  }
+
+  /**
+   * Computes memory-related configuration values.
+   * Ensures minMemoryByte is always valid and less than maxMemoryByte.
+   *
+   * @returns Memory configuration with maxMemoryByte and minMemoryByte
+   */
+  private computeMemoryConfiguration() {
     const maxMemoryByte =
       this.config?.releaseMemoryPolicy?.maxMemoryByte ?? DefaultMaxMemoryByte;
-    const minMemoryByte = this.config?.releaseMemoryPolicy?.minMemoryByte;
 
-    this.configCache = {
+    const userMinMemoryByte = this.config?.releaseMemoryPolicy?.minMemoryByte;
+
+    // Ensure minMemoryByte is valid: defined, positive, and less than maxMemoryByte
+    const minMemoryByte =
+      userMinMemoryByte !== undefined &&
+      userMinMemoryByte > 0 &&
+      userMinMemoryByte < maxMemoryByte
+        ? userMinMemoryByte
+        : maxMemoryByte / 2; // Default to half of max memory
+
+    return {
       maxMemoryByte,
-      minMemoryByte:
-        minMemoryByte !== undefined && minMemoryByte < maxMemoryByte
-          ? minMemoryByte
-          : maxMemoryByte / 2,
-      flushInterval: Math.max(
-        MinFlushInterval,
-        this.config.flushInterval || DefaultFlushInterval,
-      ),
-      cacheMillisecond: this.config.cacheMillisecond || DefaultCacheMillisecond,
-      timeoutMillisecond:
-        this.config.timeoutMillisecond !== undefined
-          ? Math.min(
-              this.config.cacheMillisecond || DefaultCacheMillisecond,
-              this.config.timeoutMillisecond,
-            )
-          : undefined,
+      minMemoryByte,
+    };
+  }
+
+  /**
+   * Computes timing-related configuration values.
+   * Ensures flushInterval meets minimum requirements and timeout doesn't exceed cache duration.
+   *
+   * @returns Timing configuration with flushInterval, cacheMillisecond, and timeoutMillisecond
+   */
+  private computeTimingConfiguration() {
+    // Ensure flush interval meets minimum requirement
+    const flushInterval = Math.max(
+      MinFlushInterval,
+      this.config.flushInterval ?? DefaultFlushInterval,
+    );
+
+    // Use configured cache duration or default
+    const cacheMillisecond =
+      this.config.cacheMillisecond ?? DefaultCacheMillisecond;
+
+    // Timeout cannot exceed cache duration, and should be undefined if not configured
+    const timeoutMillisecond =
+      this.config.timeoutMillisecond !== undefined
+        ? Math.min(cacheMillisecond, this.config.timeoutMillisecond)
+        : undefined;
+
+    return {
+      flushInterval,
+      cacheMillisecond,
+      timeoutMillisecond,
     };
   }
 
@@ -113,7 +164,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Maximum memory limit in bytes (default: 10MB)
    */
   private get maxMemoryMegaByte(): number {
-    return this.configCache.maxMemoryByte;
+    return this.computedConfig.maxMemoryByte;
   }
 
   /**
@@ -123,7 +174,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Minimum memory target in bytes (default: half of max memory)
    */
   private get minMemoryByte(): number {
-    return this.configCache.minMemoryByte;
+    return this.computedConfig.minMemoryByte;
   }
 
   /**
@@ -132,7 +183,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Flush interval in milliseconds (minimum: MinFlushInterval)
    */
   private get flushInterval(): number {
-    return this.configCache.flushInterval;
+    return this.computedConfig.flushInterval;
   }
 
   /**
@@ -141,7 +192,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Cache duration in milliseconds
    */
   public get cacheMillisecond(): number {
-    return this.configCache.cacheMillisecond;
+    return this.computedConfig.cacheMillisecond;
   }
 
   /**
@@ -151,7 +202,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Timeout in milliseconds, or undefined if not configured
    */
   public get timeoutMillisecond(): number | undefined {
-    return this.configCache.timeoutMillisecond;
+    return this.computedConfig.timeoutMillisecond;
   }
 
   /**
@@ -184,14 +235,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     if (this.config.cacheKeyTransform) {
       return this.config.cacheKeyTransform(key);
     }
-
-    // For non-object keys, use default transformation directly
-    if (typeof key !== 'object' || key === null) {
-      return cacheKeyTransformDefaultFn(key);
-    }
-
-    // For object keys, generate unique key each time
-    return `${cacheKeyTransformDefaultFn(key)}_${Date.now().toString(36)}${Math.random().toString(36).substr(2, 5)}`;
+    return cacheKeyTransformDefaultFn(key);
   }
 
   /**
@@ -337,7 +381,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Promise resolving to the cached or freshly fetched value
    */
   public async get(key: INPUT, forceUpdate: boolean = false): Promise<OUTPUT> {
-    this.usedCount++;
+    this.performanceMetrics.usedCount++;
     const taskKey = this.transformCacheKey(key);
 
     if (forceUpdate) {
@@ -441,7 +485,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   public delete(key: INPUT): void {
     const taskKey = this.transformCacheKey(key);
     if (this.taskMap.has(taskKey)) {
-      this.releasedMemoryBytes += this.taskMap.get(taskKey).usedBytes;
+      this.performanceMetrics.releasedMemoryBytes +=
+        this.taskMap.get(taskKey).usedBytes;
     }
     this.taskMap.delete(taskKey);
     this.concurrentRequests.delete(taskKey);
@@ -485,6 +530,9 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       currentConcurrentRequests: 0,
       maxConcurrentRequestsReached: 0,
       rejectedRequestsCount: 0,
+      overMemoryLimitCount: 0,
+      usedCount: 0,
+      releasedMemoryBytes: 0,
     };
   }
 
@@ -528,10 +576,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       cacheCount: this.cacheCount,
       usedMemory: sizeFormat(this.usedMemoryBytes),
       usedMemoryBytes: this.usedMemoryBytes,
-      usedCountTotal: this.usedCount,
+      usedCountTotal: this.performanceMetrics.usedCount,
       ...this.calculateUsageStatistics(usedCounts),
-      overMemoryLimitCount: this.overMemoryLimitCount,
-      releasedMemoryBytes: this.releasedMemoryBytes,
+      overMemoryLimitCount: this.performanceMetrics.overMemoryLimitCount,
+      releasedMemoryBytes: this.performanceMetrics.releasedMemoryBytes,
       performance: this.calculatePerformanceStatistics(),
     };
   }
@@ -545,7 +593,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     return {
       maxUsedCount: hasData ? Math.max(...usedCounts) : 0,
       minUsedCount: hasData ? Math.min(...usedCounts) : 0,
-      avgUsedCount: this.cacheCount > 0 ? this.usedCount / this.cacheCount : 0,
+      avgUsedCount:
+        this.cacheCount > 0
+          ? this.performanceMetrics.usedCount / this.cacheCount
+          : 0,
     };
   }
 
@@ -595,7 +646,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
 
     // Check if memory cleanup is needed
     if (this.shouldCleanupMemory()) {
-      this.overMemoryLimitCount++;
+      this.performanceMetrics.overMemoryLimitCount++;
       this.flushMemory(this.usedMemoryBytes - this.minMemoryByte);
     }
   }
