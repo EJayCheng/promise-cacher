@@ -170,6 +170,17 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
     if (this.config.useClones) {
       task = this.asyncOutput.then((output) => cloneDeep(output));
     }
+    
+    // Handle special case where timeout is explicitly set to 0
+    const timeoutMs = this.cacher.timeoutMillisecond;
+    if (timeoutMs === 0) {
+      // Create timeout error message when needed
+      const timeoutError = new Error(
+        `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
+      );
+      throw timeoutError;
+    }
+
     // Create timeout error message when needed
     const timeoutError = new Error(
       `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,

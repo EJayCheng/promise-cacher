@@ -6,7 +6,7 @@ import { delay } from './delay';
  *
  * @template T - The type of the promise's resolved value
  * @param task - The promise to execute with timeout limitation
- * @param timeoutMillisecond - The timeout duration in milliseconds. If <= 0, no timeout is applied
+ * @param timeoutMillisecond - The timeout duration in milliseconds. If undefined or <= 0, no timeout is applied
  * @param timeoutError - The error to throw when timeout occurs
  * @returns A promise that resolves with the task result or rejects with timeoutError on timeout
  *
@@ -21,10 +21,14 @@ import { delay } from './delay';
  */
 export async function limitTimeout<T = any>(
   task: Promise<T>,
-  timeoutMillisecond: number,
+  timeoutMillisecond: number | undefined,
   timeoutError: Error,
 ): Promise<T> {
-  if (timeoutMillisecond > 0) {
+  if (timeoutMillisecond === undefined || timeoutMillisecond <= 0) {
+    // No timeout configured or non-positive timeout, return task directly
+    return task;
+  } else {
+    // Apply timeout
     const timer = delay(timeoutMillisecond, timeoutError);
     return Promise.race([task, timer]).then((res) => {
       if (res instanceof Error) {
@@ -33,8 +37,5 @@ export async function limitTimeout<T = any>(
         return res;
       }
     });
-  } else {
-    // For timeout <= 0, no timeout is applied, return task directly
-    return task;
   }
 }

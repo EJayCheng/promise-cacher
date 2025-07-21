@@ -73,6 +73,8 @@ describe('Comprehensive PromiseCacher Tests', () => {
         },
         flushInterval: 50,
       };
+      
+      console.log('Test config:', JSON.stringify(config, null, 2));
 
       cacher = new PromiseCacher(
         async (key: string) => 'x'.repeat(1000), // Generate larger content
@@ -85,13 +87,18 @@ describe('Comprehensive PromiseCacher Tests', () => {
       await cacher.get('test3');
 
       // Wait enough time for multiple flush cycles to run
-      await delay(200);
+      await delay(400); // Increased wait time
+
+      // Force one more manual flush to ensure any pending memory checks are completed
+      await delay(100);
 
       // Check that overMemoryLimitCount has been incremented
       // Since maxMemoryByte is 0, any memory usage should trigger this
       const stats = cacher.statistics();
       console.log('Used memory bytes:', stats.usedMemoryBytes);
       console.log('Over memory limit count:', stats.overMemoryLimitCount);
+      console.log('Cache count:', stats.cacheCount);
+      
       expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
     });
 

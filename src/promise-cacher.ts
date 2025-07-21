@@ -80,9 +80,14 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Maximum memory limit in bytes (default: 10MB)
    */
   private get maxMemoryMegaByte(): number {
-    return (
-      this.config?.releaseMemoryPolicy?.maxMemoryByte || DefaultMaxMemoryByte
+    const configured = this.config?.releaseMemoryPolicy?.maxMemoryByte;
+    console.log(
+      `maxMemoryMegaByte getter: configured=${configured}, undefined=${configured === undefined}`,
     );
+    if (configured !== undefined) {
+      return configured;
+    }
+    return DefaultMaxMemoryByte;
   }
 
   /**
@@ -93,7 +98,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    */
   private get minMemoryByte(): number {
     const value = this.config?.releaseMemoryPolicy?.minMemoryByte;
-    if (value && value < this.maxMemoryMegaByte) return value;
+    if (value !== undefined && value < this.maxMemoryMegaByte) return value;
     return this.maxMemoryMegaByte / 2;
   }
 
@@ -411,10 +416,19 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       .filter((task) => task.status === CacheTaskStatusType.DEPRECATED)
       .forEach((task) => task.release());
 
+    // Debug log for memory check
+    const currentMemory = this.usedMemoryBytes;
+    const maxMemory = this.maxMemoryMegaByte;
+    const configMaxMemory = this.config?.releaseMemoryPolicy?.maxMemoryByte;
+    console.log(
+      `Flush: currentMemory=${currentMemory}, maxMemory=${maxMemory}, configMaxMemory=${configMaxMemory}`,
+    );
+
     if (
       this.usedMemoryBytes > this.maxMemoryMegaByte ||
       (this.maxMemoryMegaByte === 0 && this.usedMemoryBytes > 0)
     ) {
+      console.log('Memory limit exceeded, incrementing counter');
       this.overMemoryLimitCount++;
       this.flushMemory(this.usedMemoryBytes - this.minMemoryByte);
     }
