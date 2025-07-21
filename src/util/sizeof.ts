@@ -4,32 +4,32 @@ const ECMA_SIZES = {
   NUMBER: 8,
 };
 
-const DefaultMaxKeyLimit = 1000;
-const DefaultMaxDepth = 10;
+const maxKey = 1000;
+const maxDeep = 10;
 
-export interface SizeofOptions {
-  maxKeyLimit: number;
-  maxDepth: number;
+let isBuffer: (obj: any) => boolean = () => false;
+
+try {
+  isBuffer = Buffer.isBuffer;
+} catch (error) {
+  console.warn(
+    "Buffer.isBuffer is not available, using a fallback implementation."
+  );
 }
 
-function sizeOfObject(
-  object: any,
-  used: any[],
-  depth: number,
-  options: SizeofOptions
-): number {
-  let nextDepth = 1 + depth;
-  let bytes = 0;
+function sizeOfObject(object: {[x: string]: any}, used = [], deep = 0) {
   used.push(object);
-  for (let key in object) {
+
+  let bytes = 0;
+  for (const key in object) {
     if (!Object.hasOwnProperty.call(object, key)) {
       continue;
     }
 
-    bytes += sizeof(key, used, nextDepth);
+    bytes += sizeof(key, used, 1 + deep);
 
     try {
-      bytes += sizeof(object[key], used, nextDepth, options);
+      bytes += sizeof(object[key], used, 1 + deep);
     } catch (ex) {
       if (ex instanceof RangeError) {
         // circular reference detected, final result might be incorrect
@@ -42,49 +42,18 @@ function sizeOfObject(
   return bytes;
 }
 
-function sizeOfArray(
-  object: any,
-  used: any[],
-  depth: number,
-  options: SizeofOptions
-): number {
-  let nextDepth = 1 + depth;
-  if (object.length >= 50) {
-    let sum = object
-      .slice(0, 50)
-      .map((item) => sizeof(item, used, nextDepth, options))
-      .reduce((total, num) => total + num, 0);
-    let avg = sum / 100;
-    return avg * object.length;
-  } else {
-    return object
-      .map((item) => sizeof(item, used, nextDepth, options))
-      .reduce((total, num) => total + num, 0);
-  }
-}
-
 /**
  * Main module's entry point
  * Calculates Bytes for the provided parameter
  * @param object - handles object/string/boolean/buffer
  * @returns {*}
  */
-export function sizeof(
-  object: any,
-  used: any[] = [],
-  depth: number = 0,
-  options?: SizeofOptions
-): number {
-  options = Object.assign(
-    { maxKeyLimit: DefaultMaxKeyLimit, maxDepth: DefaultMaxDepth },
-    options
-  );
-
-  if (depth > options.maxDepth) {
+export function sizeof(object: any, used = [], deep = 0) {
+  if (deep > maxDeep) {
     return 0;
   }
 
-  if (used.length > options.maxKeyLimit) {
+  if (used.length > maxKey) {
     return 0;
   }
 
@@ -94,7 +63,7 @@ export function sizeof(
 
   used.push(object);
 
-  if (object instanceof Buffer) {
+  if (isBuffer(object)) {
     return object.length;
   }
 
@@ -107,24 +76,23 @@ export function sizeof(
     case "number":
       return ECMA_SIZES.NUMBER;
     case "object":
-      if (object instanceof Array) {
-        return sizeOfArray(object, used, 1 + depth, options);
+      if (Array.isArray(object)) {
+        if (object.length >= 50) {
+          const sum = object
+            .slice(0, 50)
+            .map((item) => sizeof(item, used, 1 + deep))
+            .reduce((acc, curr) => acc + curr, 0);
+          const avg = sum / 100;
+          return avg * object.length;
+        } else {
+          return object
+            .map((item) => sizeof(item, used, 1 + deep))
+            .reduce((acc, curr) => acc + curr, 0);
+        }
       } else {
-        return sizeOfObject(object, used, 1 + depth, options);
+        return sizeOfObject(object, used, 1 + deep);
       }
     default:
       return 0;
-  }
-}
-
-export function sizeFormat(bytes: number): string {
-  if (bytes < 1024) {
-    return bytes + " B";
-  } else if (bytes < 1048576) {
-    return parseFloat((bytes / 1024).toFixed(3)) + " KB";
-  } else if (bytes < 1073741824) {
-    return parseFloat((bytes / 1024 / 1024).toFixed(3)) + " MB";
-  } else {
-    return parseFloat((bytes / 1024 / 1024 / 1024).toFixed(3)) + " GB";
   }
 }

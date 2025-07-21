@@ -1,23 +1,38 @@
-import { CacheTask } from "./cache-task";
-import { PromiseCacher } from "./promise-cacher";
+import { CacheTask } from './cache-task';
+import { PromiseCacher } from './promise-cacher';
 
 export type FetchByKeyMethod<OUTPUT = any, INPUT = string> = (
-  input: INPUT
+  input: INPUT,
 ) => Promise<OUTPUT>;
 
 export type CalcCacheValueMethod = (
   cacher: PromiseCacher,
-  task: CacheTask
+  task: CacheTask,
 ) => number;
 
-export type ReleaseCachePolicyType = "EXPIRE" | "IDLE";
+export enum ReleaseCachePolicyType {
+  EXPIRE = 'EXPIRE',
+  IDLE = 'IDLE',
+}
+
+export enum ErrorTaskPolicyType {
+  RELEASE = 'RELEASE',
+  CACHE = 'CACHE',
+}
+
+export enum CacheTaskStatusType {
+  AWAIT = 'AWAIT',
+  ACTIVE = 'ACTIVE',
+  DEPRECATED = 'DEPRECATED',
+}
+
 export interface CacherConfig {
-  /** 快取過期模式 => EXPIRE(default): 生存時間, IDLE: 閒置時間 */
+  /** 快取過期模式 => EXPIRE(default): 生存時間, IDLE: 閒置時間 */
   releaseCachePolicy?: ReleaseCachePolicyType;
-  /** 快取過期模式之有效時間, 預設 5 min */
+  /** 快取過期模式之有效時間, 預設 5 min */
   cacheMillisecond?: number;
   /** 當非同步任務發生錯誤時如何處理 => RELEASE(default): 不快取, CACHE: 將錯誤快取 */
-  errorTaskPolicy?: "RELEASE" | "CACHE";
+  errorTaskPolicy?: ErrorTaskPolicyType;
   /** 記憶體保護政策 */
   releaseMemoryPolicy?: {
     /** 快取價值計算公式 */
@@ -38,8 +53,6 @@ export interface CacherConfig {
   useClones?: boolean;
 }
 export type CacheKeyTransformFunction<INPUT = any> = (input: INPUT) => string;
-
-export type CacheTaskStatusType = "await" | "active" | "deprecated";
 export interface PromiseCacherStatistics {
   cacheCount: number;
   usedMemory: string;
