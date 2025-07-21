@@ -1,66 +1,91 @@
 import { CacheTask } from './cache-task';
 import { PromiseCacher } from './promise-cacher';
 
+/** Method signature for fetching data by key input */
 export type FetchByKeyMethod<OUTPUT = any, INPUT = string> = (
   input: INPUT,
 ) => Promise<OUTPUT>;
 
+/** Method signature for calculating cache value score */
 export type CalcCacheValueMethod = (
   cacher: PromiseCacher,
   task: CacheTask,
 ) => number;
 
+/** Cache release policy types */
 export enum ReleaseCachePolicyType {
+  /** Cache expires after a fixed time period (time to live) */
   EXPIRE = 'EXPIRE',
+  /** Cache expires after being idle for a specific duration */
   IDLE = 'IDLE',
 }
 
+/** Error task handling policy types */
 export enum ErrorTaskPolicyType {
+  /** Release the cache when task encounters an error */
   RELEASE = 'RELEASE',
+  /** Cache the error result when task encounters an error */
   CACHE = 'CACHE',
 }
 
+/** Cache task status types */
 export enum CacheTaskStatusType {
+  /** Task is waiting to be executed */
   AWAIT = 'AWAIT',
+  /** Task is currently being executed */
   ACTIVE = 'ACTIVE',
+  /** Task is deprecated and should be cleaned up */
   DEPRECATED = 'DEPRECATED',
 }
 
 export interface CacherConfig {
-  /** 快取過期模式 => EXPIRE(default): 生存時間, IDLE: 閒置時間 */
+  /** Cache expiration mode => EXPIRE(default): time to live, IDLE: idle timeout */
   releaseCachePolicy?: ReleaseCachePolicyType;
-  /** 快取過期模式之有效時間, 預設 5 min */
+  /** Cache expiration time, default 5 min */
   cacheMillisecond?: number;
-  /** 當非同步任務發生錯誤時如何處理 => RELEASE(default): 不快取, CACHE: 將錯誤快取 */
+  /** Error task handling policy => RELEASE(default): do not cache, CACHE: cache the error */
   errorTaskPolicy?: ErrorTaskPolicyType;
-  /** 記憶體保護政策 */
+  /** Memory protection policy */
   releaseMemoryPolicy?: {
-    /** 快取價值計算公式 */
+    /** Cache value calculation formula */
     calcCacheValue?: CalcCacheValueMethod;
-    /** 當使用的記憶體大於 maxMemoryByte 後，將會把依照最後存取時間刪除快取，直到記憶體用量少於 minMemoryByte, 預設 5 MB */
+    /** When memory usage exceeds maxMemoryByte, caches will be deleted by last access time until memory usage is below minMemoryByte, default 5 MB */
     minMemoryByte?: number;
-    /** 當使用的記憶體大於 maxMemoryByte 後，將會把依照最後存取時間刪除快取，直到記憶體用量少於 minMemoryByte, 預設 10 MB */
+    /** When memory usage exceeds maxMemoryByte, caches will be deleted by last access time until memory usage is below minMemoryByte, default 10 MB */
     maxMemoryByte?: number;
   };
 
-  /** 釋放快取的時間間隔, 預設 1 min */
+  /** Cache flush interval, default 1 min */
   flushInterval?: number;
-  /** 快取依據轉換方式 */
+  /** Cache key transformation method */
   cacheKeyTransform?: CacheKeyTransformFunction;
-  /** 非同步任務超時限制, 預設不啟用 */
+  /** Async task timeout limit, disabled by default */
   timeoutMillisecond?: number;
-  /** 非同步任務輸出方式， true: 複製新實例使用, false(default): 使用共同實例 */
+  /** Async task output mode, true: use cloned instances, false(default): use shared instances */
   useClones?: boolean;
 }
+
+/** Function signature for transforming cache key from input */
 export type CacheKeyTransformFunction<INPUT = any> = (input: INPUT) => string;
+
+/** Promise cacher runtime statistics */
 export interface PromiseCacherStatistics {
+  /** Total number of cached items */
   cacheCount: number;
+  /** Human-readable memory usage string */
   usedMemory: string;
+  /** Memory usage in bytes */
   usedMemoryBytes: number;
+  /** Total count of cache usage */
   usedCountTotal: number;
+  /** Maximum usage count among all cached items */
   maxUsedCount: number;
+  /** Minimum usage count among all cached items */
   minUsedCount: number;
+  /** Average usage count across all cached items */
   avgUsedCount: number;
+  /** Number of times memory limit was exceeded */
   overMemoryLimitCount: number;
+  /** Total bytes of memory released due to cleanup */
   releasedMemoryBytes: number;
 }
