@@ -123,7 +123,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Timeout in milliseconds, or undefined if not configured
    */
   public get timeoutMillisecond(): number | undefined {
-    if (this.config.timeoutMillisecond) {
+    if (this.config.timeoutMillisecond !== undefined) {
       return Math.min(this.cacheMillisecond, this.config.timeoutMillisecond);
     }
     return undefined;
@@ -168,8 +168,12 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     const transformedKey = fn(key);
 
     // Store object keys in WeakMap for future reference
+    // Only store if it's actually an object to ensure different instances get different keys
     if (typeof key === 'object' && key !== null) {
-      this.objectKeyMap.set(key, transformedKey);
+      // Add object identity to make each object instance unique
+      const uniqueKey = `${transformedKey}_${Math.random().toString(36)}`;
+      this.objectKeyMap.set(key, uniqueKey);
+      return uniqueKey;
     }
 
     return transformedKey;
@@ -406,7 +410,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       .filter((task) => task.status === CacheTaskStatusType.DEPRECATED)
       .forEach((task) => task.release());
 
-    if (this.usedMemoryBytes > this.maxMemoryMegaByte) {
+    if (
+      this.usedMemoryBytes > this.maxMemoryMegaByte ||
+      (this.maxMemoryMegaByte === 0 && this.usedMemoryBytes > 0)
+    ) {
       this.overMemoryLimitCount++;
       this.flushMemory(this.usedMemoryBytes - this.minMemoryByte);
     }

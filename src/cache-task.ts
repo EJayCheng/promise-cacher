@@ -116,7 +116,10 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
         this.resolvedAt = Date.now();
         this.responseTime = this.resolvedAt - this.fetchStartedAt;
         if (this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
-          this.release();
+          // Delay release to avoid immediate cleanup during error handling
+          setTimeout(() => {
+            this.release();
+          }, 0);
         }
       });
   }
