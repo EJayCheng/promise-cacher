@@ -24,23 +24,30 @@ describe('Enhanced PromiseCacher Features', () => {
       }, config);
     });
 
-    it('should limit concurrent requests', async () => {
+    it('should queue requests when concurrent limit is reached', async () => {
       // Start 3 concurrent requests
       const promises = [
         cacher.get('key1'),
         cacher.get('key2'),
-        cacher.get('key3'), // This should be rejected
+        cacher.get('key3'), // This should be queued instead of rejected
       ];
 
-      // The third request should be rejected
-      await expect(promises[2]).rejects.toThrow(
-        'Maximum concurrent requests limit reached: 2',
-      );
+      // Check that queue is created
+      const stats = cacher.statistics();
+      expect(stats.performance.currentConcurrentRequests).toBe(2);
+      expect(stats.performance.currentQueueLength).toBe(1);
 
-      // The first two should succeed
-      const results = await Promise.allSettled(promises.slice(0, 2));
-      expect(results[0].status).toBe('fulfilled');
-      expect(results[1].status).toBe('fulfilled');
+      // All requests should eventually succeed
+      const results = await Promise.all(promises);
+      expect(results[0]).toBe('result-key1');
+      expect(results[1]).toBe('result-key2');
+      expect(results[2]).toBe('result-key3');
+
+      // After completion, queue should be empty
+      const finalStats = cacher.statistics();
+      expect(finalStats.performance.currentConcurrentRequests).toBe(0);
+      expect(finalStats.performance.currentQueueLength).toBe(0);
+      expect(finalStats.performance.maxQueueLengthReached).toBe(1);
     });
 
     it('should track concurrent request statistics', async () => {
@@ -56,6 +63,38 @@ describe('Enhanced PromiseCacher Features', () => {
       const stats3 = cacher.statistics();
       expect(stats3.performance.currentConcurrentRequests).toBe(0);
       expect(stats3.performance.maxConcurrentRequestsReached).toBe(2);
+    });
+
+    it('should handle multiple queued requests correctly', async () => {
+      // Start 5 concurrent requests with limit of 2
+      const promises = [
+        cacher.get('key1'),
+        cacher.get('key2'),
+        cacher.get('key3'),
+        cacher.get('key4'),
+        cacher.get('key5'),
+      ];
+
+      // Check initial state: 2 concurrent, 3 queued
+      const stats = cacher.statistics();
+      expect(stats.performance.currentConcurrentRequests).toBe(2);
+      expect(stats.performance.currentQueueLength).toBe(3);
+
+      // All requests should eventually succeed
+      const results = await Promise.all(promises);
+      expect(results).toEqual([
+        'result-key1',
+        'result-key2',
+        'result-key3',
+        'result-key4',
+        'result-key5',
+      ]);
+
+      // After completion, everything should be cleared
+      const finalStats = cacher.statistics();
+      expect(finalStats.performance.currentConcurrentRequests).toBe(0);
+      expect(finalStats.performance.currentQueueLength).toBe(0);
+      expect(finalStats.performance.maxQueueLengthReached).toBe(3);
     });
   });
 
@@ -95,6 +134,8 @@ describe('Enhanced PromiseCacher Features', () => {
           currentConcurrentRequests: expect.any(Number),
           maxConcurrentRequestsReached: expect.any(Number),
           rejectedRequestsCount: expect.any(Number),
+          currentQueueLength: expect.any(Number),
+          maxQueueLengthReached: expect.any(Number),
         }),
       );
     });

@@ -106,5 +106,9 @@ export interface PromiseCacherStatistics {
     maxConcurrentRequestsReached: number;
     /** Number of requests rejected due to concurrency limit */
     rejectedRequestsCount: number;
+    /** Current number of requests in queue waiting for execution */
+    currentQueueLength: number;
+    /** Maximum queue length reached */
+    maxQueueLengthReached: number;
   };
 }

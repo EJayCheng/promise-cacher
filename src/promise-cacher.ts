@@ -57,10 +57,20 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     currentConcurrentRequests: 0,
     maxConcurrentRequestsReached: 0,
     rejectedRequestsCount: 0,
+    currentQueueLength: 0,
+    maxQueueLengthReached: 0,
   };
 
   /** Set to track currently running concurrent requests */
   private concurrentRequests = new Set<string>();
+
+  /** Queue for pending requests when concurrent limit is reached */
+  private requestQueue: Array<{
+    taskKey: string;
+    key: INPUT;
+    resolve: (result: OUTPUT) => void;
+    reject: (error: any) => void;
+  }> = [];
 
   /**
    * Creates a new PromiseCacher instance.
@@ -81,9 +91,6 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    */
   private get maxMemoryMegaByte(): number {
     const configured = this.config?.releaseMemoryPolicy?.maxMemoryByte;
-    console.log(
-      `maxMemoryMegaByte getter: configured=${configured}, undefined=${configured === undefined}`,
-    );
     if (configured !== undefined) {
       return configured;
     }
@@ -186,6 +193,89 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   }
 
   /**
+   * Executes a request and handles concurrency tracking and queue processing.
+   *
+   * @param taskKey - The transformed cache key
+   * @param key - The original input key
+   * @returns Promise resolving to the cached or freshly fetched value
+   */
+  private async executeRequest(taskKey: string, key: INPUT): Promise<OUTPUT> {
+    // Track concurrent request
+    this.concurrentRequests.add(taskKey);
+    this.performanceMetrics.currentConcurrentRequests =
+      this.concurrentRequests.size;
+    this.performanceMetrics.maxConcurrentRequestsReached = Math.max(
+      this.performanceMetrics.maxConcurrentRequestsReached,
+      this.concurrentRequests.size,
+    );
+    this.performanceMetrics.totalFetchCount++;
+
+    // Create wrapped fetch function that handles concurrency tracking and queue processing
+    const wrappedFetch = this.fetchFn(key).finally(() => {
+      this.concurrentRequests.delete(taskKey);
+      this.performanceMetrics.currentConcurrentRequests =
+        this.concurrentRequests.size;
+      // Process queued requests when a slot becomes available
+      this.processQueue();
+    });
+
+    const task = new CacheTask(this, key, wrappedFetch);
+    this.taskMap.set(taskKey, task);
+    // Only set timer when creating new tasks to reduce unnecessary calls
+    this.setTimer();
+
+    const result = await task.output();
+
+    // Track performance metrics
+    if (task.responseTime) {
+      this.performanceMetrics.responseTimes.push(task.responseTime);
+      // Keep only last 1000 response times for memory efficiency
+      if (this.performanceMetrics.responseTimes.length > 1000) {
+        this.performanceMetrics.responseTimes =
+          this.performanceMetrics.responseTimes.slice(-1000);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Processes queued requests when concurrent slots become available.
+   */
+  private processQueue(): void {
+    const maxConcurrent = this.config.maxConcurrentRequests;
+
+    while (
+      this.requestQueue.length > 0 &&
+      (!maxConcurrent || this.concurrentRequests.size < maxConcurrent)
+    ) {
+      const queuedRequest = this.requestQueue.shift();
+      if (!queuedRequest) break;
+
+      // Update queue length metrics
+      this.performanceMetrics.currentQueueLength = this.requestQueue.length;
+
+      // Check if the task is already in cache (might have been added while queued)
+      if (this.taskMap.has(queuedRequest.taskKey)) {
+        const existingTask = this.taskMap.get(queuedRequest.taskKey);
+        if (existingTask.status !== CacheTaskStatusType.DEPRECATED) {
+          // Use existing task
+          existingTask
+            .output()
+            .then(queuedRequest.resolve)
+            .catch(queuedRequest.reject);
+          continue;
+        }
+      }
+
+      // Execute the queued request
+      this.executeRequest(queuedRequest.taskKey, queuedRequest.key)
+        .then(queuedRequest.resolve)
+        .catch(queuedRequest.reject);
+    }
+  }
+
+  /**
    * Retrieves a cached value or fetches it if not available.
    * This is the primary method for accessing cached data.
    *
@@ -222,33 +312,24 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
         maxConcurrent > 0 &&
         this.concurrentRequests.size >= maxConcurrent
       ) {
-        this.performanceMetrics.rejectedRequestsCount++;
-        throw new Error(
-          `Maximum concurrent requests limit reached: ${maxConcurrent}`,
-        );
+        // Queue the request instead of throwing an error
+        return new Promise<OUTPUT>((resolve, reject) => {
+          this.requestQueue.push({
+            taskKey,
+            key,
+            resolve,
+            reject,
+          });
+          // Update queue length metrics
+          this.performanceMetrics.currentQueueLength = this.requestQueue.length;
+          this.performanceMetrics.maxQueueLengthReached = Math.max(
+            this.performanceMetrics.maxQueueLengthReached,
+            this.requestQueue.length,
+          );
+        });
       }
 
-      // Track concurrent request
-      this.concurrentRequests.add(taskKey);
-      this.performanceMetrics.currentConcurrentRequests =
-        this.concurrentRequests.size;
-      this.performanceMetrics.maxConcurrentRequestsReached = Math.max(
-        this.performanceMetrics.maxConcurrentRequestsReached,
-        this.concurrentRequests.size,
-      );
-      this.performanceMetrics.totalFetchCount++;
-
-      // Create wrapped fetch function that handles concurrency tracking
-      const wrappedFetch = this.fetchFn(key).finally(() => {
-        this.concurrentRequests.delete(taskKey);
-        this.performanceMetrics.currentConcurrentRequests =
-          this.concurrentRequests.size;
-      });
-
-      task = new CacheTask(this, key, wrappedFetch);
-      this.taskMap.set(taskKey, task);
-      // Only set timer when creating new tasks to reduce unnecessary calls
-      this.setTimer();
+      return this.executeRequest(taskKey, key);
     }
 
     const result = await task.output();
@@ -325,12 +406,15 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   public clear(): void {
     this.taskMap.clear();
     this.concurrentRequests.clear();
+    this.requestQueue = [];
     this.performanceMetrics = {
       responseTimes: [],
       totalFetchCount: 0,
       currentConcurrentRequests: 0,
       maxConcurrentRequestsReached: 0,
       rejectedRequestsCount: 0,
+      currentQueueLength: 0,
+      maxQueueLengthReached: 0,
     };
     if (this.timer) {
       clearInterval(this.timer);
@@ -402,6 +486,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
         maxConcurrentRequestsReached:
           this.performanceMetrics.maxConcurrentRequestsReached,
         rejectedRequestsCount: this.performanceMetrics.rejectedRequestsCount,
+        currentQueueLength: this.requestQueue.length,
+        maxQueueLengthReached: this.performanceMetrics.maxQueueLengthReached,
       },
     };
   }
@@ -416,19 +502,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       .filter((task) => task.status === CacheTaskStatusType.DEPRECATED)
       .forEach((task) => task.release());
 
-    // Debug log for memory check
-    const currentMemory = this.usedMemoryBytes;
-    const maxMemory = this.maxMemoryMegaByte;
-    const configMaxMemory = this.config?.releaseMemoryPolicy?.maxMemoryByte;
-    console.log(
-      `Flush: currentMemory=${currentMemory}, maxMemory=${maxMemory}, configMaxMemory=${configMaxMemory}`,
-    );
-
     if (
       this.usedMemoryBytes > this.maxMemoryMegaByte ||
       (this.maxMemoryMegaByte === 0 && this.usedMemoryBytes > 0)
     ) {
-      console.log('Memory limit exceeded, incrementing counter');
       this.overMemoryLimitCount++;
       this.flushMemory(this.usedMemoryBytes - this.minMemoryByte);
     }

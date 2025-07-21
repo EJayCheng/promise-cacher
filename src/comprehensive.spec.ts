@@ -188,7 +188,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
   });
 
   describe('Concurrent Request Limiting', () => {
-    it('should reject requests when max concurrent limit is reached', async () => {
+    it('should queue requests when max concurrent limit is reached', async () => {
       const config: CacherConfig = {
         maxConcurrentRequests: 2,
       };
@@ -203,19 +203,23 @@ describe('Comprehensive PromiseCacher Tests', () => {
       const promises = [
         cacher.get('key1'),
         cacher.get('key2'),
-        cacher.get('key3'), // Should be rejected
-        cacher.get('key4'), // Should be rejected
+        cacher.get('key3'), // Should be queued instead of rejected
+        cacher.get('key4'), // Should be queued instead of rejected
       ];
 
       const results = await Promise.allSettled(promises);
 
+      // All requests should eventually succeed due to queuing
       expect(results[0].status).toBe('fulfilled');
       expect(results[1].status).toBe('fulfilled');
-      expect(results[2].status).toBe('rejected');
-      expect(results[3].status).toBe('rejected');
+      expect(results[2].status).toBe('fulfilled');
+      expect(results[3].status).toBe('fulfilled');
 
       const stats = cacher.statistics();
-      expect(stats.performance.rejectedRequestsCount).toBe(2);
+      // No rejections since we queue instead of reject
+      expect(stats.performance.rejectedRequestsCount).toBe(0);
+      // Should have had queued requests
+      expect(stats.performance.maxQueueLengthReached).toBeGreaterThan(0);
     });
 
     it('should allow new requests after concurrent requests complete', async () => {

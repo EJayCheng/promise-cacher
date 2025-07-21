@@ -68,19 +68,19 @@ describe('Comprehensive PromiseCacher Tests', () => {
       }, config);
     });
 
-    it('should limit concurrent requests', async () => {
-      // Start 3 requests but only 2 are allowed
+    it('should queue requests when concurrent limit is reached', async () => {
+      // Start 3 requests but only 2 are allowed to run concurrently
       const startTime = Date.now();
 
       const promises = [
         cacher.get('key1'),
         cacher.get('key2'),
-        cacher.get('key3'), // This should be rejected
+        cacher.get('key3'), // This should be queued instead of rejected
       ];
 
       const results = await Promise.allSettled(promises);
 
-      // Check that at least one was rejected due to concurrency limit
+      // All requests should eventually succeed (no rejections due to queuing)
       const rejectedCount = results.filter(
         (r) => r.status === 'rejected',
       ).length;
@@ -88,9 +88,9 @@ describe('Comprehensive PromiseCacher Tests', () => {
         (r) => r.status === 'fulfilled',
       ).length;
 
-      // Should have at most 2 successful results due to limit
-      expect(successCount).toBeLessThanOrEqual(2);
-      expect(rejectedCount).toBeGreaterThan(0);
+      // All 3 should succeed since they get queued instead of rejected
+      expect(successCount).toBe(3);
+      expect(rejectedCount).toBe(0);
     });
 
     it('should track concurrent request statistics', async () => {
