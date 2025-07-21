@@ -12,15 +12,8 @@ import {
   PromiseCacherStatistics,
 } from './define';
 import { cacheKeyTransformDefaultFn } from './util/cache-key-transform-default-fn';
+import { QueuedRequest, RequestQueue } from './util/request-queue';
 import { sizeFormat } from './util/size-format';
-
-/** Type definition for queued request */
-interface QueuedRequest<INPUT, OUTPUT> {
-  taskKey: string;
-  key: INPUT;
-  resolve: (result: OUTPUT) => void;
-  reject: (error: any) => void;
-}
 
 /**
  * A sophisticated promise caching system that provides automatic memory management,
@@ -64,15 +57,13 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     currentConcurrentRequests: 0,
     maxConcurrentRequestsReached: 0,
     rejectedRequestsCount: 0,
-    currentQueueLength: 0,
-    maxQueueLengthReached: 0,
   };
 
   /** Set to track currently running concurrent requests */
   private concurrentRequests = new Set<string>();
 
-  /** Queue for pending requests when concurrent limit is reached */
-  private requestQueue: QueuedRequest<INPUT, OUTPUT>[] = [];
+  /** Queue for managing pending requests when concurrent limit is reached */
+  private requestQueue = new RequestQueue<INPUT, OUTPUT>();
 
   /**
    * Creates a new PromiseCacher instance.
@@ -296,7 +287,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
 
     // Early exit if no queue or max concurrent limit reached
     if (
-      this.requestQueue.length === 0 ||
+      this.requestQueue.isEmpty ||
       (maxConcurrent && this.concurrentRequests.size >= maxConcurrent)
     ) {
       return;
@@ -307,10 +298,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       : this.requestQueue.length;
 
     // Process multiple requests at once if slots are available
-    const requestsToProcess = this.requestQueue.splice(0, availableSlots);
-
-    // Update queue length metrics once
-    this.performanceMetrics.currentQueueLength = this.requestQueue.length;
+    const requestsToProcess = this.requestQueue.dequeue(availableSlots);
 
     // Process each request
     for (const queuedRequest of requestsToProcess) {
@@ -416,16 +404,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * Queues a request when concurrency limit is reached.
    */
   private queueRequest(taskKey: string, key: INPUT): Promise<OUTPUT> {
-    return new Promise<OUTPUT>((resolve, reject) => {
-      this.requestQueue.push({ taskKey, key, resolve, reject });
-
-      // Update queue length metrics
-      this.performanceMetrics.currentQueueLength = this.requestQueue.length;
-      this.performanceMetrics.maxQueueLengthReached = Math.max(
-        this.performanceMetrics.maxQueueLengthReached,
-        this.requestQueue.length,
-      );
-    });
+    return this.requestQueue.enqueue(taskKey, key);
   }
 
   /**
@@ -488,7 +467,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     // Clear all cache data
     this.taskMap.clear();
     this.concurrentRequests.clear();
-    this.requestQueue = [];
+    this.requestQueue.clear();
 
     // Reset performance metrics to initial state
     this.resetPerformanceMetrics();
@@ -507,8 +486,6 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       currentConcurrentRequests: 0,
       maxConcurrentRequestsReached: 0,
       rejectedRequestsCount: 0,
-      currentQueueLength: 0,
-      maxQueueLengthReached: 0,
     };
   }
 
@@ -579,6 +556,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   private calculatePerformanceStatistics() {
     const responseTimes = this.performanceMetrics.responseTimes;
     const hasResponseTimes = responseTimes.length > 0;
+    const queueMetrics = this.requestQueue.performanceMetrics;
 
     let avgResponseTime = 0;
     let minResponseTime = 0;
@@ -601,8 +579,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       maxConcurrentRequestsReached:
         this.performanceMetrics.maxConcurrentRequestsReached,
       rejectedRequestsCount: this.performanceMetrics.rejectedRequestsCount,
-      currentQueueLength: this.requestQueue.length,
-      maxQueueLengthReached: this.performanceMetrics.maxQueueLengthReached,
+      currentQueueLength: queueMetrics.currentQueueLength,
+      maxQueueLengthReached: queueMetrics.maxQueueLengthReached,
     };
   }
 
