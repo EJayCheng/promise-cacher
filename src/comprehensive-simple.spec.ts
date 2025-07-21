@@ -19,6 +19,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     if (cacher) {
       cacher.clear();
     }
+    jest.restoreAllMocks();
   });
 
   describe('Basic Edge Cases', () => {

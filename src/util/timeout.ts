@@ -33,10 +33,8 @@ export async function limitTimeout<T = any>(
         return res;
       }
     });
-  } else if (timeoutMillisecond === 0) {
-    // For zero timeout, immediately reject
-    throw timeoutError;
   } else {
+    // For timeout <= 0, no timeout is applied, return task directly
     return task;
   }
 }

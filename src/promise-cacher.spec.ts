@@ -18,6 +18,7 @@ describe('PromiseCacher', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('Constructor', () => {
@@ -509,6 +510,7 @@ describe('PromiseCacher', () => {
 
     afterEach(() => {
       timerCacher.clear();
+      jest.restoreAllMocks();
     });
 
     it('should start timer after first cache operation', async () => {

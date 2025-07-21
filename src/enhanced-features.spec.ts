@@ -9,6 +9,7 @@ describe('Enhanced PromiseCacher Features', () => {
     if (cacher) {
       cacher.clear();
     }
+    jest.restoreAllMocks();
   });
 
   describe('Concurrent Request Limiting', () => {
@@ -112,6 +113,7 @@ describe('Enhanced PromiseCacher Features', () => {
       if (objectCacher) {
         objectCacher.clear();
       }
+      jest.restoreAllMocks();
     });
 
     it('should handle object keys efficiently', async () => {

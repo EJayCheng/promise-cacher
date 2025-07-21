@@ -155,28 +155,29 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns String representation of the cache key
    */
   private transformCacheKey(key: INPUT): string {
-    // For object keys, try to use WeakMap for better memory management
+    const fn: CacheKeyTransformFunction =
+      this.config.cacheKeyTransform || cacheKeyTransformDefaultFn;
+
+    // If using custom transformation, trust the function's output for equality
+    if (this.config.cacheKeyTransform) {
+      return fn(key);
+    }
+
+    // For default transformation with object keys, use WeakMap for better memory management
     if (typeof key === 'object' && key !== null) {
       const existing = this.objectKeyMap.get(key);
       if (existing) {
         return existing;
       }
-    }
 
-    const fn: CacheKeyTransformFunction =
-      this.config.cacheKeyTransform || cacheKeyTransformDefaultFn;
-    const transformedKey = fn(key);
-
-    // Store object keys in WeakMap for future reference
-    // Only store if it's actually an object to ensure different instances get different keys
-    if (typeof key === 'object' && key !== null) {
-      // Add object identity to make each object instance unique
+      // Add object identity to make each object instance unique for default transform
+      const transformedKey = fn(key);
       const uniqueKey = `${transformedKey}_${Math.random().toString(36)}`;
       this.objectKeyMap.set(key, uniqueKey);
       return uniqueKey;
     }
 
-    return transformedKey;
+    return fn(key);
   }
 
   /**

@@ -19,6 +19,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     if (cacher) {
       cacher.clear();
     }
+    jest.restoreAllMocks();
   });
 
   describe('Boundary Conditions and Edge Cases', () => {
@@ -83,23 +84,14 @@ describe('Comprehensive PromiseCacher Tests', () => {
       await cacher.get('test2');
       await cacher.get('test3');
 
-      // Wait a bit to ensure cache tasks are resolved
-      await delay(50);
+      // Wait enough time for multiple flush cycles to run
+      await delay(200);
 
-      // Check current memory usage
-      let stats = cacher.statistics();
+      // Check that overMemoryLimitCount has been incremented
+      // Since maxMemoryByte is 0, any memory usage should trigger this
+      const stats = cacher.statistics();
       console.log('Used memory bytes:', stats.usedMemoryBytes);
-
-      // Manually trigger flush multiple times to test memory limit logic
-      // This should trigger overMemoryLimitCount since maxMemoryByte is 0
-      const flush = (cacher as any).flush.bind(cacher);
-      flush();
-      flush();
-      flush();
-
-      await delay(100); // Wait for flush
-
-      stats = cacher.statistics();
+      console.log('Over memory limit count:', stats.overMemoryLimitCount);
       expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
     });
 
