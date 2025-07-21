@@ -34,10 +34,11 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   /** Timestamp when the async operation was resolved (success or error) */
   public resolvedAt: number;
 
-  /** Error thrown when the operation times out */
-  private timeoutError = new Error(
-    `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
-  );
+  /** Timestamp when the fetch operation started */
+  public fetchStartedAt: number = Date.now();
+
+  /** Response time in milliseconds (from fetch start to resolution) */
+  public responseTime: number;
 
   /** Error that occurred during the async operation execution */
   private taskError: Error;
@@ -51,7 +52,8 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    */
   private safeStringify(input: any): string {
     try {
-      return JSON.stringify(input);
+      const result = JSON.stringify(input);
+      return result ?? String(input);
     } catch (error) {
       // Handle circular references
       if (error instanceof TypeError && error.message.includes('circular')) {
@@ -107,10 +109,12 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
       .then((value) => {
         this.usedBytes = sizeof(value);
         this.resolvedAt = Date.now();
+        this.responseTime = this.resolvedAt - this.fetchStartedAt;
       })
       .catch((error) => {
         this.taskError = error;
         this.resolvedAt = Date.now();
+        this.responseTime = this.resolvedAt - this.fetchStartedAt;
         if (this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
           this.release();
         }
@@ -163,11 +167,12 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
     if (this.config.useClones) {
       task = this.asyncOutput.then((output) => cloneDeep(output));
     }
-    return limitTimeout(
-      task,
-      this.cacher.timeoutMillisecond,
-      this.timeoutError,
+    // Create timeout error message when needed
+    const timeoutError = new Error(
+      `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
     );
+
+    return limitTimeout(task, this.cacher.timeoutMillisecond, timeoutError);
   }
 
   /**

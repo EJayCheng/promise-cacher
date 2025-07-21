@@ -1,0 +1,603 @@
+import {
+  CacherConfig,
+  ErrorTaskPolicyType,
+  ReleaseCachePolicyType,
+} from './define';
+import { PromiseCacher } from './promise-cacher';
+import { delay } from './util/delay';
+
+describe('Comprehensive PromiseCacher Tests', () => {
+  let mockFetchFn: jest.Mock;
+  let cacher: PromiseCacher<string, string>;
+
+  beforeEach(() => {
+    mockFetchFn = jest.fn();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (cacher) {
+      cacher.clear();
+    }
+  });
+
+  describe('Boundary Conditions and Edge Cases', () => {
+    it('should handle null and undefined keys properly', async () => {
+      cacher = new PromiseCacher(async (key: any) => `result-${key}`);
+
+      const result1 = await cacher.get(null as any);
+      const result2 = await cacher.get(undefined as any);
+
+      expect(result1).toBe('result-null');
+      expect(result2).toBe('result-undefined');
+      expect(cacher.cacheCount).toBe(2);
+    });
+
+    it('should handle empty string keys', async () => {
+      cacher = new PromiseCacher(async (key: string) => `result-${key}`);
+
+      const result = await cacher.get('');
+      expect(result).toBe('result-');
+      expect(cacher.has('')).toBe(true);
+    });
+
+    it('should handle very large keys', async () => {
+      cacher = new PromiseCacher(async (key: string) => `result-${key.length}`);
+
+      const largeKey = 'x'.repeat(10000);
+      const result = await cacher.get(largeKey);
+      expect(result).toBe('result-10000');
+    });
+
+    it('should handle multiple basic data types as keys', async () => {
+      const multiCacher = new PromiseCacher<string, any>(async (key: any) => {
+        return `result-${typeof key}`;
+      });
+
+      await multiCacher.get(123);
+      await multiCacher.get(true);
+      await multiCacher.get(new Date());
+      await multiCacher.get([1, 2, 3]);
+
+      expect(multiCacher.cacheCount).toBe(4);
+      multiCacher.clear();
+    });
+  });
+  describe('Memory Management Edge Cases', () => {
+    it('should handle zero memory limits gracefully', async () => {
+      const config: CacherConfig = {
+        releaseMemoryPolicy: {
+          maxMemoryByte: 0,
+          minMemoryByte: 0,
+        },
+        flushInterval: 50,
+      };
+
+      cacher = new PromiseCacher(
+        async (key: string) => `result-${key}`,
+        config,
+      );
+
+      await cacher.get('test1');
+      await delay(100); // Wait for flush
+
+      const stats = cacher.statistics();
+      expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
+    });
+
+    it('should handle minMemoryByte greater than maxMemoryByte', async () => {
+      const config: CacherConfig = {
+        releaseMemoryPolicy: {
+          maxMemoryByte: 100,
+          minMemoryByte: 200, // Invalid: min > max
+        },
+      };
+
+      cacher = new PromiseCacher(
+        async (key: string) => `result-${key}`,
+        config,
+      );
+
+      // Should use default behavior (half of max)
+      const stats = cacher.statistics();
+      expect(stats).toBeDefined();
+    });
+
+    it('should handle aggressive memory cleanup', async () => {
+      const config: CacherConfig = {
+        releaseMemoryPolicy: {
+          maxMemoryByte: 1, // Very small limit
+          minMemoryByte: 0,
+        },
+        flushInterval: 50,
+      };
+
+      cacher = new PromiseCacher(async (key: string) => {
+        return 'x'.repeat(1000); // Large results
+      }, config);
+
+      await cacher.get('key1');
+      await cacher.get('key2');
+      await cacher.get('key3');
+
+      await delay(150); // Wait for cleanup cycles
+
+      const stats = cacher.statistics();
+      expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
+      expect(stats.releasedMemoryBytes).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Timeout Handling', () => {
+    it('should handle timeout correctly', async () => {
+      const config: CacherConfig = {
+        timeoutMillisecond: 50,
+        cacheMillisecond: 1000,
+      };
+
+      mockFetchFn.mockImplementation(async () => {
+        await delay(100); // Longer than timeout
+        return 'should-not-reach';
+      });
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      await expect(cacher.get('timeout-key')).rejects.toThrow();
+    });
+
+    it('should respect timeout being limited by cache duration', async () => {
+      const config: CacherConfig = {
+        timeoutMillisecond: 2000,
+        cacheMillisecond: 1000, // Shorter than timeout
+      };
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      expect(cacher.timeoutMillisecond).toBe(1000); // Should be limited to cache duration
+    });
+
+    it('should handle zero timeout', async () => {
+      const config: CacherConfig = {
+        timeoutMillisecond: 0,
+      };
+
+      cacher = new PromiseCacher(async () => 'result', config);
+
+      await expect(cacher.get('zero-timeout')).rejects.toThrow();
+    });
+  });
+
+  describe('Concurrent Request Limiting', () => {
+    it('should reject requests when max concurrent limit is reached', async () => {
+      const config: CacherConfig = {
+        maxConcurrentRequests: 2,
+      };
+
+      mockFetchFn.mockImplementation(async (key: string) => {
+        await delay(100);
+        return `result-${key}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      const promises = [
+        cacher.get('key1'),
+        cacher.get('key2'),
+        cacher.get('key3'), // Should be rejected
+        cacher.get('key4'), // Should be rejected
+      ];
+
+      const results = await Promise.allSettled(promises);
+
+      expect(results[0].status).toBe('fulfilled');
+      expect(results[1].status).toBe('fulfilled');
+      expect(results[2].status).toBe('rejected');
+      expect(results[3].status).toBe('rejected');
+
+      const stats = cacher.statistics();
+      expect(stats.performance.rejectedRequestsCount).toBe(2);
+    });
+
+    it('should allow new requests after concurrent requests complete', async () => {
+      const config: CacherConfig = {
+        maxConcurrentRequests: 1,
+      };
+
+      mockFetchFn.mockImplementation(async (key: string) => {
+        await delay(50);
+        return `result-${key}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      // First request should succeed
+      await cacher.get('key1');
+
+      // Second request should also succeed (first is done)
+      await cacher.get('key2');
+
+      const stats = cacher.statistics();
+      expect(stats.performance.rejectedRequestsCount).toBe(0);
+      expect(stats.performance.totalFetchCount).toBe(2);
+    });
+
+    it('should track max concurrent requests correctly', async () => {
+      const config: CacherConfig = {
+        maxConcurrentRequests: 3,
+      };
+
+      mockFetchFn.mockImplementation(async (key: string) => {
+        await delay(100);
+        return `result-${key}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      const promises = [
+        cacher.get('key1'),
+        cacher.get('key2'),
+        cacher.get('key3'),
+      ];
+
+      // Check stats while requests are in flight
+      await delay(10);
+      const stats = cacher.statistics();
+      expect(stats.performance.currentConcurrentRequests).toBe(3);
+      expect(stats.performance.maxConcurrentRequestsReached).toBe(3);
+
+      await Promise.allSettled(promises);
+
+      const finalStats = cacher.statistics();
+      expect(finalStats.performance.currentConcurrentRequests).toBe(0);
+    });
+  });
+
+  describe('WeakMap Optimization', () => {
+    it('should reuse transformed keys for object references', async () => {
+      const objCacher = new PromiseCacher<string, any>(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      const objKey = { id: 1, name: 'test' };
+
+      await objCacher.get(objKey);
+      await objCacher.get(objKey); // Same reference
+
+      expect(objCacher.cacheCount).toBe(1); // Should use same cache entry
+      objCacher.clear();
+    });
+
+    it('should handle object garbage collection', async () => {
+      const objCacher = new PromiseCacher<string, any>(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      let objKey: any = { id: 1, name: 'test' };
+      await objCacher.get(objKey);
+
+      // Remove reference
+      objKey = null;
+
+      // Force garbage collection (if possible)
+      if (global.gc) {
+        global.gc();
+      }
+
+      // New object with same content should create new cache entry
+      const newObjKey = { id: 1, name: 'test' };
+      await objCacher.get(newObjKey);
+
+      expect(objCacher.cacheCount).toBe(2);
+      objCacher.clear();
+    });
+  });
+
+  describe('Performance Metrics', () => {
+    it('should track response times accurately', async () => {
+      mockFetchFn.mockImplementation(async (key: string) => {
+        const delay_time = key === 'slow' ? 100 : 20;
+        await delay(delay_time);
+        return `result-${key}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn);
+
+      await cacher.get('fast');
+      await cacher.get('slow');
+      await cacher.get('fast2');
+
+      const stats = cacher.statistics();
+      expect(stats.performance.avgResponseTime).toBeGreaterThan(0);
+      expect(stats.performance.minResponseTime).toBeGreaterThan(0);
+      expect(stats.performance.maxResponseTime).toBeGreaterThan(
+        stats.performance.minResponseTime,
+      );
+      expect(stats.performance.totalFetchCount).toBe(3);
+    });
+
+    it('should limit response time history for memory efficiency', async () => {
+      mockFetchFn.mockImplementation(async (key: string) => {
+        await delay(1);
+        return `result-${key}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn);
+
+      // Generate more than 1000 requests to test array limiting
+      for (let i = 0; i < 1050; i++) {
+        await cacher.get(`key-${i}`);
+      }
+
+      const stats = cacher.statistics();
+      expect(stats.performance.totalFetchCount).toBe(1050);
+      expect(stats.performance.avgResponseTime).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Error Handling Policies', () => {
+    it('should cache errors when errorTaskPolicy is CACHE', async () => {
+      const config: CacherConfig = {
+        errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+      };
+
+      const error = new Error('Test error');
+      mockFetchFn.mockRejectedValue(error);
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      await expect(cacher.get('error-key')).rejects.toThrow('Test error');
+
+      // Error should be cached
+      expect(cacher.has('error-key')).toBe(true);
+
+      // Second call should not trigger fetchFn again
+      await expect(cacher.get('error-key')).rejects.toThrow('Test error');
+      expect(mockFetchFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('should release errors when errorTaskPolicy is RELEASE', async () => {
+      const config: CacherConfig = {
+        errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
+      };
+
+      mockFetchFn
+        .mockRejectedValueOnce(new Error('First error'))
+        .mockResolvedValueOnce('Success');
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      await expect(cacher.get('error-key')).rejects.toThrow('First error');
+
+      // Error should not be cached
+      await delay(10); // Allow error handling to complete
+      expect(cacher.has('error-key')).toBe(false);
+
+      // Second call should trigger fetchFn again
+      const result = await cacher.get('error-key');
+      expect(result).toBe('Success');
+      expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Cache Expiration Policies', () => {
+    it('should expire cache based on time (EXPIRE policy)', async () => {
+      const config: CacherConfig = {
+        cacheMillisecond: 50,
+        releaseCachePolicy: ReleaseCachePolicyType.EXPIRE,
+        flushInterval: 25,
+      };
+
+      mockFetchFn.mockImplementation(
+        async (key: string) => `result-${key}-${Date.now()}`,
+      );
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      const result1 = await cacher.get('expire-key');
+
+      // Wait for expiration
+      await delay(75);
+
+      const result2 = await cacher.get('expire-key');
+
+      expect(result1).not.toBe(result2); // Should be different due to expiration
+      expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('should expire cache based on idle time (IDLE policy)', async () => {
+      const config: CacherConfig = {
+        cacheMillisecond: 50,
+        releaseCachePolicy: ReleaseCachePolicyType.IDLE,
+        flushInterval: 25,
+      };
+
+      mockFetchFn.mockImplementation(
+        async (key: string) => `result-${key}-${Date.now()}`,
+      );
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      const result1 = await cacher.get('idle-key');
+
+      // Access within idle time
+      await delay(30);
+      const result2 = await cacher.get('idle-key');
+      expect(result1).toBe(result2); // Should be same (not expired)
+
+      // Wait longer than idle time without access
+      await delay(75);
+      const result3 = await cacher.get('idle-key');
+
+      expect(result1).not.toBe(result3); // Should be different (expired due to idle)
+      expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Clone Behavior', () => {
+    it('should return cloned objects when useClones is true', async () => {
+      const config: CacherConfig = {
+        useClones: true,
+      };
+
+      const originalObject = { value: 'original', nested: { prop: 'data' } };
+      mockFetchFn.mockResolvedValue(originalObject);
+
+      const cloneCacher = new PromiseCacher<any, string>(mockFetchFn, config);
+
+      const result1 = await cloneCacher.get('clone-key');
+      const result2 = await cloneCacher.get('clone-key');
+
+      // Should be deep equal but different references
+      expect(result1).toEqual(originalObject);
+      expect(result2).toEqual(originalObject);
+      expect(result1).not.toBe(originalObject);
+      expect(result2).not.toBe(originalObject);
+      expect(result1).not.toBe(result2); // Different clones
+
+      // Modifying one should not affect others
+      result1.value = 'modified';
+      expect(result2.value).toBe('original');
+      expect(originalObject.value).toBe('original');
+
+      cloneCacher.clear();
+    });
+
+    it('should return shared references when useClones is false', async () => {
+      const config: CacherConfig = {
+        useClones: false,
+      };
+
+      const originalObject = { value: 'original' };
+      mockFetchFn.mockResolvedValue(originalObject);
+
+      const sharedCacher = new PromiseCacher<any, string>(mockFetchFn, config);
+
+      const result1 = await sharedCacher.get('shared-key');
+      const result2 = await sharedCacher.get('shared-key');
+
+      // Should be same reference
+      expect(result1).toBe(result2);
+
+      sharedCacher.clear();
+    });
+  });
+
+  describe('Flush Interval Configuration', () => {
+    it('should respect minimum flush interval', async () => {
+      const config: CacherConfig = {
+        flushInterval: 1, // Less than minimum
+      };
+
+      cacher = new PromiseCacher(async () => 'result', config);
+
+      // Should use minimum interval, not throw error
+      await cacher.get('test');
+      expect(cacher.cacheCount).toBe(1);
+    });
+
+    it('should handle very long flush intervals', async () => {
+      const config: CacherConfig = {
+        flushInterval: 60000, // 1 minute
+      };
+
+      cacher = new PromiseCacher(async () => 'result', config);
+
+      await cacher.get('test');
+      expect(cacher.cacheCount).toBe(1);
+    });
+  });
+
+  describe('Statistics Edge Cases', () => {
+    it('should handle statistics calculation with no data', () => {
+      cacher = new PromiseCacher(async () => 'result');
+
+      const stats = cacher.statistics();
+      expect(stats.cacheCount).toBe(0);
+      expect(stats.usedMemoryBytes).toBe(0);
+      expect(stats.usedCountTotal).toBe(0);
+      expect(stats.performance.avgResponseTime).toBe(0);
+      expect(stats.performance.minResponseTime).toBe(0);
+      expect(stats.performance.maxResponseTime).toBe(0);
+    });
+
+    it('should handle statistics with single entry', async () => {
+      cacher = new PromiseCacher(async () => 'result');
+
+      await cacher.get('single');
+
+      const stats = cacher.statistics();
+      expect(stats.cacheCount).toBe(1);
+      expect(stats.maxUsedCount).toBe(stats.minUsedCount);
+      expect(stats.avgUsedCount).toBe(1);
+    });
+  });
+
+  describe('Key Transformation Edge Cases', () => {
+    it('should handle custom key transformation that returns same key for different inputs', async () => {
+      const config: CacherConfig = {
+        cacheKeyTransform: () => 'same-key', // Always returns same key
+      };
+
+      mockFetchFn.mockImplementation(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      cacher = new PromiseCacher(mockFetchFn, config);
+
+      await cacher.get('input1');
+      await cacher.get('input2');
+
+      // Should only have one cache entry due to key collision
+      expect(cacher.cacheCount).toBe(1);
+      expect(mockFetchFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle key transformation that throws error', async () => {
+      const config: CacherConfig = {
+        cacheKeyTransform: () => {
+          throw new Error('Transform error');
+        },
+      };
+
+      cacher = new PromiseCacher(async () => 'result', config);
+
+      await expect(cacher.get('test')).rejects.toThrow('Transform error');
+    });
+  });
+
+  describe('Force Update Edge Cases', () => {
+    it('should handle force update during concurrent requests', async () => {
+      mockFetchFn.mockImplementation(async (key: string) => {
+        await delay(50);
+        return `result-${key}-${Date.now()}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn);
+
+      const promise1 = cacher.get('concurrent-key');
+      const promise2 = cacher.get('concurrent-key', true); // Force update
+
+      const results = await Promise.all([promise1, promise2]);
+
+      // Results might be same or different depending on timing
+      expect(results).toHaveLength(2);
+    });
+
+    it('should handle multiple force updates', async () => {
+      let counter = 0;
+      mockFetchFn.mockImplementation(async (key: string) => {
+        return `result-${key}-${++counter}`;
+      });
+
+      cacher = new PromiseCacher(mockFetchFn);
+
+      await cacher.get('force-key');
+      const result1 = await cacher.get('force-key', true);
+      const result2 = await cacher.get('force-key', true);
+
+      expect(result1).toBe('result-force-key-2');
+      expect(result2).toBe('result-force-key-3');
+      expect(mockFetchFn).toHaveBeenCalledTimes(3);
+    });
+  });
+});

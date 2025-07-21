@@ -63,6 +63,8 @@ export interface CacherConfig {
   timeoutMillisecond?: number;
   /** Async task output mode, true: use cloned instances, false(default): use shared instances */
   useClones?: boolean;
+  /** Maximum concurrent requests limit, unlimited by default */
+  maxConcurrentRequests?: number;
 }
 
 /** Function signature for transforming cache key from input */
@@ -88,4 +90,21 @@ export interface PromiseCacherStatistics {
   overMemoryLimitCount: number;
   /** Total bytes of memory released due to cleanup */
   releasedMemoryBytes: number;
+  /** Performance metrics */
+  performance: {
+    /** Average response time in milliseconds */
+    avgResponseTime: number;
+    /** Minimum response time in milliseconds */
+    minResponseTime: number;
+    /** Maximum response time in milliseconds */
+    maxResponseTime: number;
+    /** Total number of fetch operations */
+    totalFetchCount: number;
+    /** Current number of concurrent requests */
+    currentConcurrentRequests: number;
+    /** Maximum concurrent requests reached */
+    maxConcurrentRequestsReached: number;
+    /** Number of requests rejected due to concurrency limit */
+    rejectedRequestsCount: number;
+  };
 }

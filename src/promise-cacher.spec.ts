@@ -521,8 +521,11 @@ describe('PromiseCacher', () => {
       setIntervalSpy.mockRestore();
     });
 
-    it('should clear timer when cache is cleared', () => {
+    it('should clear timer when cache is cleared', async () => {
       const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+
+      // Initialize timer by performing a cache operation
+      await timerCacher.get('timer-key');
 
       timerCacher.clear();
 

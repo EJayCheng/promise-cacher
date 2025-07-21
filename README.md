@@ -18,6 +18,9 @@ A sophisticated TypeScript library that provides asynchronous memory caching wit
 - **🔧 Configurable Timeout Handling**: Prevents long-running operations from blocking the cache
 - **🛡️ Error Handling Policies**: Choose whether to cache errors or release them immediately
 - **🎯 TypeScript Support**: Full type safety with generic support
+- **⚡ Enhanced Performance Metrics**: Track response times, fetch counts, and concurrency statistics
+- **🔒 Concurrent Request Limiting**: Configurable limits to prevent resource exhaustion
+- **🗑️ WeakMap Optimization**: Better memory management for object-based cache keys
 
 ### Problems It Solves
 
