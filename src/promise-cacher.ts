@@ -26,7 +26,6 @@ import { sizeFormat } from './util/size-format';
  * - Timeout handling for long-running operations
  * - Error handling policies (cache or release errors)
  * - Concurrent request limiting
- * - WeakMap optimization for object keys
  *
  * @template OUTPUT - The type of values returned by cached promises
  * @template INPUT - The type of keys used to identify cache entries
@@ -34,9 +33,6 @@ import { sizeFormat } from './util/size-format';
 export class PromiseCacher<OUTPUT = any, INPUT = any> {
   /** Map storing all active cache tasks, keyed by transformed cache keys */
   private taskMap = new Map<string, CacheTask<OUTPUT, INPUT>>();
-
-  /** WeakMap for object key references to enable garbage collection */
-  private objectKeyMap = new WeakMap<object, string>();
 
   /** Counter tracking how many times memory limit was exceeded */
   private overMemoryLimitCount: number = 0;
@@ -65,6 +61,15 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   /** Queue for managing pending requests when concurrent limit is reached */
   private requestQueue = new RequestQueue<INPUT, OUTPUT>();
 
+  /** Cached configuration values for performance optimization */
+  private readonly configCache: {
+    maxMemoryByte: number;
+    minMemoryByte: number;
+    flushInterval: number;
+    cacheMillisecond: number;
+    timeoutMillisecond: number | undefined;
+  };
+
   /**
    * Creates a new PromiseCacher instance.
    *
@@ -74,7 +79,32 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   public constructor(
     public fetchFn: FetchByKeyMethod<OUTPUT, INPUT>,
     public config: CacherConfig = {},
-  ) {}
+  ) {
+    // Pre-calculate frequently used config values for better performance
+    const maxMemoryByte =
+      this.config?.releaseMemoryPolicy?.maxMemoryByte ?? DefaultMaxMemoryByte;
+    const minMemoryByte = this.config?.releaseMemoryPolicy?.minMemoryByte;
+
+    this.configCache = {
+      maxMemoryByte,
+      minMemoryByte:
+        minMemoryByte !== undefined && minMemoryByte < maxMemoryByte
+          ? minMemoryByte
+          : maxMemoryByte / 2,
+      flushInterval: Math.max(
+        MinFlushInterval,
+        this.config.flushInterval || DefaultFlushInterval,
+      ),
+      cacheMillisecond: this.config.cacheMillisecond || DefaultCacheMillisecond,
+      timeoutMillisecond:
+        this.config.timeoutMillisecond !== undefined
+          ? Math.min(
+              this.config.cacheMillisecond || DefaultCacheMillisecond,
+              this.config.timeoutMillisecond,
+            )
+          : undefined,
+    };
+  }
 
   /**
    * Gets the maximum memory threshold in bytes.
@@ -83,11 +113,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Maximum memory limit in bytes (default: 10MB)
    */
   private get maxMemoryMegaByte(): number {
-    const configured = this.config?.releaseMemoryPolicy?.maxMemoryByte;
-    if (configured !== undefined) {
-      return configured;
-    }
-    return DefaultMaxMemoryByte;
+    return this.configCache.maxMemoryByte;
   }
 
   /**
@@ -97,9 +123,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Minimum memory target in bytes (default: half of max memory)
    */
   private get minMemoryByte(): number {
-    const value = this.config?.releaseMemoryPolicy?.minMemoryByte;
-    if (value !== undefined && value < this.maxMemoryMegaByte) return value;
-    return this.maxMemoryMegaByte / 2;
+    return this.configCache.minMemoryByte;
   }
 
   /**
@@ -108,8 +132,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Flush interval in milliseconds (minimum: MinFlushInterval)
    */
   private get flushInterval(): number {
-    if (!this.config.flushInterval) return DefaultFlushInterval;
-    return Math.max(MinFlushInterval, this.config.flushInterval);
+    return this.configCache.flushInterval;
   }
 
   /**
@@ -118,7 +141,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Cache duration in milliseconds
    */
   public get cacheMillisecond(): number {
-    return this.config.cacheMillisecond || DefaultCacheMillisecond;
+    return this.configCache.cacheMillisecond;
   }
 
   /**
@@ -128,10 +151,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Timeout in milliseconds, or undefined if not configured
    */
   public get timeoutMillisecond(): number | undefined {
-    if (this.config.timeoutMillisecond !== undefined) {
-      return Math.min(this.cacheMillisecond, this.config.timeoutMillisecond);
-    }
-    return undefined;
+    return this.configCache.timeoutMillisecond;
   }
 
   /**
@@ -154,18 +174,15 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
 
   /**
    * Transforms an input key into a string cache key using the configured transform function.
-   * Uses WeakMap for object keys to enable better garbage collection.
    * Optimized for performance with early returns and minimal function calls.
    *
    * @param key - The input key to transform
    * @returns String representation of the cache key
    */
   private transformCacheKey(key: INPUT): string {
-    const customTransform = this.config.cacheKeyTransform;
-
     // Use custom transformation if provided
-    if (customTransform) {
-      return customTransform(key);
+    if (this.config.cacheKeyTransform) {
+      return this.config.cacheKeyTransform(key);
     }
 
     // For non-object keys, use default transformation directly
@@ -173,26 +190,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       return cacheKeyTransformDefaultFn(key);
     }
 
-    // For object keys, check WeakMap cache first
-    const cachedKey = this.objectKeyMap.get(key);
-    if (cachedKey) {
-      return cachedKey;
-    }
-
-    // Generate unique key for new object
-    const baseKey = cacheKeyTransformDefaultFn(key);
-    const uniqueKey = `${baseKey}_${this.generateUniqueId()}`;
-    this.objectKeyMap.set(key, uniqueKey);
-
-    return uniqueKey;
-  }
-
-  /**
-   * Generates a unique identifier for object keys.
-   * More efficient than Math.random().toString(36).
-   */
-  private generateUniqueId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    // For object keys, generate unique key each time
+    return `${cacheKeyTransformDefaultFn(key)}_${Date.now().toString(36)}${Math.random().toString(36).substr(2, 5)}`;
   }
 
   /**

@@ -7,3 +7,5 @@
 - Please read the `README.md` to learn the basic information about this project.
 
 - The code and comments in this project are primarily in English. Other languages will be used only when necessary. When you ask me questions, please respond in the language I use.
+
+- To run tests to ensure functionality, run `npm run test`
