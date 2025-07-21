@@ -203,7 +203,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
   });
 
   describe('Object Key Handling', () => {
-    it('should generate unique cache keys for object references', async () => {
+    it('should generate same cache keys for same object content', async () => {
       const objCacher = new PromiseCacher<string, any>(
         async (key: any) => `result-${JSON.stringify(key)}`,
       );
@@ -213,8 +213,24 @@ describe('Comprehensive PromiseCacher Tests', () => {
       await objCacher.get(objKey);
       await objCacher.get(objKey); // Same reference
 
-      // Without WeakMap optimization, each object access creates a new cache entry
-      expect(objCacher.cacheCount).toBe(2);
+      // With content-based key transformation, same content uses same cache entry
+      expect(objCacher.cacheCount).toBe(1);
+      objCacher.clear();
+    });
+
+    it('should handle different object instances with identical content', async () => {
+      const objCacher = new PromiseCacher<string, any>(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      const objKey1 = { id: 1, name: 'test' };
+      const objKey2 = { id: 1, name: 'test' }; // Different instance, same content
+
+      await objCacher.get(objKey1);
+      await objCacher.get(objKey2);
+
+      // Same content objects should share the same cache entry
+      expect(objCacher.cacheCount).toBe(1);
       objCacher.clear();
     });
   });

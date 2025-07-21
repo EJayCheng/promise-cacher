@@ -157,19 +157,43 @@ describe('Enhanced PromiseCacher Features', () => {
       jest.restoreAllMocks();
     });
 
-    it('should handle object keys with unique cache entries', async () => {
+    it('should handle object keys with content-based caching', async () => {
       const objKey1 = { id: 1, name: 'test' };
       const objKey2 = { id: 2, name: 'test2' };
 
       await objectCacher.get(objKey1);
       await objectCacher.get(objKey2);
 
-      // Get the same object key again - creates new cache entry due to unique key generation
+      // Get the same object key again - reuses same cache entry due to content-based key generation
       const result = await objectCacher.get(objKey1);
 
       expect(result).toBe('result-{"id":1,"name":"test"}');
-      // Without WeakMap optimization, each object access creates a new cache entry
-      expect(objectCacher.cacheCount).toBe(3);
+      // With content-based key transformation, same content uses same cache entry
+      expect(objectCacher.cacheCount).toBe(2);
+    });
+
+    it('should treat objects with same content as same cache key', async () => {
+      const objKey1 = { id: 1, name: 'test' };
+      const objKey2 = { id: 1, name: 'test' }; // Same content, different object
+
+      await objectCacher.get(objKey1);
+      const result = await objectCacher.get(objKey2);
+
+      expect(result).toBe('result-{"id":1,"name":"test"}');
+      // Same content should use same cache entry
+      expect(objectCacher.cacheCount).toBe(1);
+    });
+
+    it('should handle object property order independence', async () => {
+      const objKey1 = { id: 1, name: 'test', status: 'active' };
+      const objKey2 = { name: 'test', status: 'active', id: 1 }; // Different order, same content
+
+      await objectCacher.get(objKey1);
+      const result = await objectCacher.get(objKey2);
+
+      expect(result).toBe('result-{"id":1,"name":"test","status":"active"}');
+      // Objects with same content but different property order should use same cache
+      expect(objectCacher.cacheCount).toBe(1);
     });
 
     it('should work with string keys as before', async () => {

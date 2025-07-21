@@ -277,7 +277,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
   });
 
   describe('Object Key Handling', () => {
-    it('should generate unique cache keys for object references', async () => {
+    it('should generate same cache keys for same object content', async () => {
       const objCacher = new PromiseCacher<string, any>(
         async (key: any) => `result-${JSON.stringify(key)}`,
       );
@@ -287,12 +287,12 @@ describe('Comprehensive PromiseCacher Tests', () => {
       await objCacher.get(objKey);
       await objCacher.get(objKey); // Same reference
 
-      // Without WeakMap optimization, each object access creates a new cache entry
-      expect(objCacher.cacheCount).toBe(2);
+      // With content-based key transformation, same content uses same cache entry
+      expect(objCacher.cacheCount).toBe(1);
       objCacher.clear();
     });
 
-    it('should handle different object instances', async () => {
+    it('should handle different object instances with same content', async () => {
       const objCacher = new PromiseCacher<string, any>(
         async (key: any) => `result-${JSON.stringify(key)}`,
       );
@@ -308,11 +308,52 @@ describe('Comprehensive PromiseCacher Tests', () => {
         global.gc();
       }
 
-      // New object with same content should create new cache entry
+      // New object with same content should reuse same cache entry
       const newObjKey = { id: 1, name: 'test' };
       await objCacher.get(newObjKey);
 
-      // Each object access creates a separate cache entry
+      // Same content objects share the same cache entry
+      expect(objCacher.cacheCount).toBe(1);
+      objCacher.clear();
+    });
+
+    it('should handle complex nested objects consistently', async () => {
+      const objCacher = new PromiseCacher<string, any>(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      const complexKey1 = {
+        user: { id: 1, profile: { name: 'test', settings: { theme: 'dark' } } },
+        filters: ['active', 'verified'],
+        metadata: { version: 1 },
+      };
+
+      const complexKey2 = {
+        metadata: { version: 1 },
+        user: { profile: { settings: { theme: 'dark' }, name: 'test' }, id: 1 },
+        filters: ['active', 'verified'],
+      };
+
+      await objCacher.get(complexKey1);
+      await objCacher.get(complexKey2);
+
+      // Complex objects with same content but different structure order should use same cache
+      expect(objCacher.cacheCount).toBe(1);
+      objCacher.clear();
+    });
+
+    it('should differentiate between truly different object contents', async () => {
+      const objCacher = new PromiseCacher<string, any>(
+        async (key: any) => `result-${JSON.stringify(key)}`,
+      );
+
+      const objKey1 = { id: 1, name: 'test', status: 'active' };
+      const objKey2 = { id: 1, name: 'test', status: 'inactive' }; // Different status
+
+      await objCacher.get(objKey1);
+      await objCacher.get(objKey2);
+
+      // Different content should create different cache entries
       expect(objCacher.cacheCount).toBe(2);
       objCacher.clear();
     });
