@@ -1,4 +1,4 @@
-import { RequestQueue } from '../request-queue';
+import { RequestQueue } from './request-queue';
 
 describe('RequestQueue', () => {
   let queue: RequestQueue<string, number>;

@@ -5,6 +5,8 @@ mode: agent
 Please complete the following two tasks:
 
 1. **Create a comprehensive `README.md` file** for the project. First, review the project thoroughly. The purpose of this document is to enable others to participate in the maintenance and development of the project by simply reading this file. There are several essential points that must be addressed (including, but not limited to):
+   - **Clarity and Conciseness**: Readme.md should not be too long, but it should be comprehensive enough to cover all the important aspects of the project. It should be easy to read and understand, even for those who are not familiar with the project.
+
    - **Project Overview**: Clearly describe the main purpose of this project. What problem does it solve, and what are its key features?
 
    - **Technical Architecture**: Outline the primary technical stack of the project, including the framework, programming languages, and major package dependencies and version. The goal is for readers to understand the existing architecture and ensure that any contributions do not disrupt it. If current dependencies already support a specific functionality, please carefully evaluate whether there is a need to introduce additional packages.
@@ -19,7 +21,7 @@ Please complete the following two tasks:
 
    - **Testing**: Describe the testing framework and tools used in the project, as well as how to run tests. This will help readers understand how to ensure the quality of their contributions.
 
-   - **Usage**: If this is a library, please describe how the library is used and provide examples.
+   - **Usage**: If this is a library, please describe how the library is used and provide examples, and explain the effects of adjustable parameters and preset values.
 
 2. **Create or update the `.github/copilot-instructions.md` file** if it does not exist. Please include the following points exactly as they are. and do not change the description:
 

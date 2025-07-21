@@ -6,6 +6,7 @@
   "module": "dist/index.js",
   "typings": "dist/index.d.ts",
   "scripts": {
+    "build": "npm run prepublish",
     "prepublish": "rimraf dist && tsc",
     "test": "jest",
     "test:coverage": "jest --coverage"
