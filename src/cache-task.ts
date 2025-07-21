@@ -170,7 +170,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
     if (this.config.useClones) {
       task = this.asyncOutput.then((output) => cloneDeep(output));
     }
-    
+
     // Handle special case where timeout is explicitly set to 0
     const timeoutMs = this.cacher.timeoutMillisecond;
     if (timeoutMs === 0) {
