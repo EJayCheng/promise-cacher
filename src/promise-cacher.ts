@@ -168,8 +168,9 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     if (!task) {
       task = new CacheTask(this, key, this.fetchFn(key));
       this.taskMap.set(taskKey, task);
+      // Only set timer when creating new tasks to reduce unnecessary calls
+      this.setTimer();
     }
-    this.setTimer();
     return task.output();
   }
 

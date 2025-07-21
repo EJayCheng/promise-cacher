@@ -13,11 +13,11 @@ try {
   isBuffer = Buffer.isBuffer;
 } catch (error) {
   console.warn(
-    "Buffer.isBuffer is not available, using a fallback implementation."
+    'Buffer.isBuffer is not available, using a fallback implementation.',
   );
 }
 
-function sizeOfObject(object: {[x: string]: any}, used = [], deep = 0) {
+function sizeOfObject(object: { [x: string]: any }, used = [], deep = 0) {
   used.push(object);
 
   let bytes = 0;
@@ -69,20 +69,20 @@ export function sizeof(object: any, used = [], deep = 0) {
 
   const type = typeof object;
   switch (type) {
-    case "string":
+    case 'string':
       return object.length * ECMA_SIZES.STRING;
-    case "boolean":
+    case 'boolean':
       return ECMA_SIZES.BOOLEAN;
-    case "number":
+    case 'number':
       return ECMA_SIZES.NUMBER;
-    case "object":
+    case 'object':
       if (Array.isArray(object)) {
         if (object.length >= 50) {
           const sum = object
             .slice(0, 50)
             .map((item) => sizeof(item, used, 1 + deep))
             .reduce((acc, curr) => acc + curr, 0);
-          const avg = sum / 100;
+          const avg = sum / 50; // Fixed: should divide by sample size (50), not 100
           return avg * object.length;
         } else {
           return object

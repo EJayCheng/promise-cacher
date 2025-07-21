@@ -36,7 +36,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
 
   /** Error thrown when the operation times out */
   private timeoutError = new Error(
-    `Error CacheTask timeout: key#${this.safeStringify(this.input)}`,
+    `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
   );
 
   /** Error that occurred during the async operation execution */
