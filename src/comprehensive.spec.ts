@@ -1,4 +1,8 @@
-import { CacherConfig, ErrorTaskPolicyType, ExpirePolicyType } from './define';
+import {
+  CacherConfig,
+  ErrorTaskPolicyType,
+  ExpirationStrategyType,
+} from './define';
 import { PromiseCacher } from './promise-cacher';
 import { delay } from './util/delay';
 
@@ -457,7 +461,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should expire cache based on time (EXPIRE policy)', async () => {
       const config: CacherConfig = {
         cacheMillisecond: 50,
-        expirePolicy: ExpirePolicyType.EXPIRE,
+        expirePolicy: ExpirationStrategyType.EXPIRE,
         flushInterval: 25,
       };
 
@@ -481,7 +485,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should expire cache based on idle time (IDLE policy)', async () => {
       const config: CacherConfig = {
         cacheMillisecond: 50,
-        expirePolicy: ExpirePolicyType.IDLE,
+        expirePolicy: ExpirationStrategyType.IDLE,
         flushInterval: 25,
       };
 

@@ -27,7 +27,7 @@ export type CalcCacheScoreFn = (
  * Cache release policy types
  * Defines when cached data should be released from memory
  */
-export enum ExpirePolicyType {
+export enum ExpirationStrategyType {
   /** Cache expires after a fixed time period (time to live) */
   EXPIRE = 'EXPIRE',
   /** Cache expires after being idle for a specific duration */
@@ -65,27 +65,64 @@ export enum CacheTaskStatusType {
  * Defines all available options for cache behavior customization
  */
 export interface CacherConfig {
-  /**
-   * Cache expiration mode
-   * @default ReleaseCachePolicyType.EXPIRE
-   * - EXPIRE: time to live
-   * - IDLE: idle timeout
-   */
-  expirePolicy?: ExpirePolicyType;
+  cachePolicy?: {
+    /**
+     * Cache key transformation method
+     * Function to transform input into cache key string
+     */
+    cacheKeyTransform?: CacheKeyTransformFunction;
+    /**
+     * Cache expiration mode
+     * @default ExpirationStrategyType.EXPIRE
+     * - EXPIRE: time to live
+     * - IDLE: idle timeout
+     */
+    expirationStrategy: ExpirationStrategyType;
+    /**
+     * Cache expiration time in milliseconds
+     * @default 300000 (5 minutes)
+     */
+    ttlMs?: number;
 
-  /**
-   * Cache expiration time in milliseconds
-   * @default 300000 (5 minutes)
-   */
-  ttlMs?: number;
+    /**
+     * Error task handling policy
+     * @default ErrorTaskPolicyType.RELEASE
+     * - RELEASE: do not cache errors
+     * - CACHE: cache the error result
+     */
+    errorTaskPolicy?: ErrorTaskPolicyType;
 
-  /**
-   * Error task handling policy
-   * @default ErrorTaskPolicyType.RELEASE
-   * - RELEASE: do not cache errors
-   * - CACHE: cache the error result
-   */
-  errorTaskPolicy?: ErrorTaskPolicyType;
+    /**
+     * Cache flush interval in milliseconds
+     * How often to check for expired cache entries
+     * @default 60000 (1 minute)
+     */
+    flushIntervalMs?: number;
+  };
+
+  fetchingPolicy?: {
+    /**
+     * Async task output mode
+     * @default false
+     * - true: use cloned instances (safer but slower)
+     * - false: use shared instances (faster but requires careful handling)
+     */
+    useClones?: boolean;
+
+    /**
+     * Async task timeout limit in milliseconds
+     * @default undefined (disabled)
+     * If set, operations exceeding this time will be cancelled
+     */
+    timeoutMs?: number;
+
+    /**
+     * Maximum concurrent requests limit
+     * @default undefined (unlimited)
+     * Limits the number of simultaneous async operations
+     */
+    concurrency?: number;
+  };
 
   /**
    * Memory protection policy configuration
@@ -113,41 +150,6 @@ export interface CacherConfig {
      */
     maxMemoryBytes?: number;
   };
-
-  /**
-   * Cache flush interval in milliseconds
-   * How often to check for expired cache entries
-   * @default 60000 (1 minute)
-   */
-  flushIntervalMs?: number;
-
-  /**
-   * Cache key transformation method
-   * Function to transform input into cache key string
-   */
-  cacheKeyTransform?: CacheKeyTransformFunction;
-
-  /**
-   * Async task timeout limit in milliseconds
-   * @default undefined (disabled)
-   * If set, operations exceeding this time will be cancelled
-   */
-  timeoutMs?: number;
-
-  /**
-   * Async task output mode
-   * @default false
-   * - true: use cloned instances (safer but slower)
-   * - false: use shared instances (faster but requires careful handling)
-   */
-  useClones?: boolean;
-
-  /**
-   * Maximum concurrent requests limit
-   * @default undefined (unlimited)
-   * Limits the number of simultaneous async operations
-   */
-  concurrency?: number;
 }
 
 /**
@@ -221,4 +223,23 @@ export interface PromiseCacherStatistics {
     /** Maximum queue length reached during runtime */
     maxQueueLengthReached: number;
   };
+}
+
+export interface PerformanceMetrics {
+  /** Array storing response times in milliseconds for calculating performance statistics */
+  responseTimes: number[];
+  /** Total number of fetch operations executed (including both cache hits and misses) */
+  totalFetchCount: number;
+  /** Number of concurrent requests currently being processed */
+  currentConcurrentRequests: number;
+  /** Maximum number of concurrent requests reached during the lifecycle */
+  maxConcurrentRequestsReached: number;
+  /** Number of requests that were rejected due to system constraints */
+  rejectedRequestsCount: number;
+  /** Counter tracking how many times memory usage exceeded the configured limit */
+  overMemoryLimitCount: number;
+  /** Total number of cache access attempts (get method calls) */
+  usedCount: number;
+  /** Total bytes of memory released through cache cleanup operations */
+  releasedMemoryBytes: number;
 }

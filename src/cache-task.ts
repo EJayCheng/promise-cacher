@@ -4,7 +4,7 @@ import {
   CacheTaskStatusType,
   CalcCacheScoreFn,
   ErrorTaskPolicyType,
-  ExpirePolicyType,
+  ExpirationStrategyType,
 } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { calcCacheScoreDefaultFn } from './util/calc-cache-score';
@@ -143,12 +143,12 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
 
   public get isExpired(): boolean {
     const now = Date.now();
-    if (this.config.expirePolicy === ExpirePolicyType.IDLE) {
+    if (this.config.expirePolicy === ExpirationStrategyType.IDLE) {
       if (now - this.lastAccessedAt > this.cacher.cacheMillisecond) {
         return true;
       }
     }
-    if (this.config.expirePolicy === ExpirePolicyType.EXPIRE) {
+    if (this.config.expirePolicy === ExpirationStrategyType.EXPIRE) {
       if (now - this.resolvedAt > this.cacher.cacheMillisecond) {
         return true;
       }

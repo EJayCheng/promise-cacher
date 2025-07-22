@@ -2,7 +2,7 @@ import { CacheTask } from './cache-task';
 import {
   CacheTaskStatusType,
   ErrorTaskPolicyType,
-  ExpirePolicyType,
+  ExpirationStrategyType,
 } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { delay } from './util/delay';
@@ -16,7 +16,7 @@ describe('CacheTask', () => {
     mockFetchFn = jest.fn();
     cacher = new PromiseCacher(mockFetchFn, {
       cacheMillisecond: 1000,
-      expirePolicy: ExpirePolicyType.EXPIRE,
+      expirePolicy: ExpirationStrategyType.EXPIRE,
       errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
       useClones: false,
     });
@@ -64,7 +64,7 @@ describe('CacheTask', () => {
     it('should return "deprecated" when task is expired (EXPIRE policy)', async () => {
       const shortCacher = new PromiseCacher(mockFetchFn, {
         cacheMillisecond: 10,
-        expirePolicy: ExpirePolicyType.EXPIRE,
+        expirePolicy: ExpirationStrategyType.EXPIRE,
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(shortCacher, 'test-key', promise);
@@ -76,7 +76,7 @@ describe('CacheTask', () => {
     it('should return "deprecated" when task is idle too long (IDLE policy)', async () => {
       const idleCacher = new PromiseCacher(mockFetchFn, {
         cacheMillisecond: 10,
-        expirePolicy: ExpirePolicyType.IDLE,
+        expirePolicy: ExpirationStrategyType.IDLE,
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(idleCacher, 'test-key', promise);

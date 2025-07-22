@@ -1,4 +1,4 @@
-import { ExpirePolicyType, PromiseCacher } from '../';
+import { ExpirationStrategyType, PromiseCacher } from '../';
 
 // 使用範例和最佳實踐
 console.log('=== Promise Cacher 使用範例和最佳實踐 ===\n');
@@ -41,7 +41,7 @@ const advancedCacher = new PromiseCacher<string, string>(
   },
   {
     // 使用閒置過期策略
-    expirePolicy: ExpirePolicyType.IDLE,
+    expirePolicy: ExpirationStrategyType.IDLE,
     cacheMillisecond: 10 * 1000, // 10 秒閒置過期
 
     // 記憶體管理

@@ -1,4 +1,4 @@
-import { ExpirePolicyType, PromiseCacher } from '../';
+import { ExpirationStrategyType, PromiseCacher } from '../';
 
 interface PerformanceTestResult {
   testName: string;
@@ -297,7 +297,7 @@ class PerformanceAnalyzer {
         return `TTL-${key}`;
       },
       {
-        expirePolicy: ExpirePolicyType.EXPIRE,
+        expirePolicy: ExpirationStrategyType.EXPIRE,
         cacheMillisecond: 2000,
       },
     );
@@ -310,7 +310,7 @@ class PerformanceAnalyzer {
         return `IDLE-${key}`;
       },
       {
-        expirePolicy: ExpirePolicyType.IDLE,
+        expirePolicy: ExpirationStrategyType.IDLE,
         cacheMillisecond: 2000,
       },
     );

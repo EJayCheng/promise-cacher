@@ -1,5 +1,6 @@
 import { CacheTask } from './cache-task';
 import {
+  DefaultConcurrency,
   DefaultFlushIntervalMs,
   DefaultMaxMemoryBytes,
   DefaultTtlMs,
@@ -9,6 +10,7 @@ import {
   CacherConfig,
   CacheTaskStatusType,
   FetchByKeyMethod,
+  PerformanceMetrics,
   PromiseCacherStatistics,
 } from './define';
 import { cacheKeyTransformDefaultFn } from './util/cache-key-transform-default-fn';
@@ -37,22 +39,14 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   private timer: ReturnType<typeof setInterval>;
 
   /** Performance and usage tracking */
-  private performanceMetrics = {
-    /** Array storing response times in milliseconds for calculating performance statistics */
-    responseTimes: [] as number[],
-    /** Total number of fetch operations executed (including both cache hits and misses) */
+  private performanceMetrics: PerformanceMetrics = {
+    responseTimes: [],
     totalFetchCount: 0,
-    /** Number of concurrent requests currently being processed */
     currentConcurrentRequests: 0,
-    /** Maximum number of concurrent requests reached during the lifecycle */
     maxConcurrentRequestsReached: 0,
-    /** Number of requests that were rejected due to system constraints */
     rejectedRequestsCount: 0,
-    /** Counter tracking how many times memory usage exceeded the configured limit */
     overMemoryLimitCount: 0,
-    /** Total number of cache access attempts (get method calls) */
     usedCount: 0,
-    /** Total bytes of memory released through cache cleanup operations */
     releasedMemoryBytes: 0,
   };
 
@@ -131,16 +125,16 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     // Ensure flush interval meets minimum requirement
     const flushInterval = Math.max(
       MinFlushIntervalMs,
-      this.config.flushIntervalMs ?? DefaultFlushIntervalMs,
+      this.config?.cachePolicy?.flushIntervalMs ?? DefaultFlushIntervalMs,
     );
 
     // Use configured cache duration or default
-    const ttlMs = this.config.ttlMs ?? DefaultTtlMs;
+    const ttlMs = this.config?.cachePolicy?.ttlMs ?? DefaultTtlMs;
 
     // Timeout cannot exceed cache duration, and should be undefined if not configured
     const timeoutMs =
-      typeof this.config.timeoutMs == 'number'
-        ? Math.min(ttlMs, this.config.timeoutMs)
+      typeof this.config?.fetchingPolicy?.timeoutMs == 'number'
+        ? Math.min(ttlMs, this.config?.fetchingPolicy?.timeoutMs)
         : undefined;
 
     return {
@@ -188,6 +182,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     return this.computedConfig.ttlMs;
   }
 
+  public get concurrency(): number {
+    return this.config?.fetchingPolicy?.concurrency ?? DefaultConcurrency;
+  }
+
   /**
    * Gets the timeout limit for fetch operations.
    * The timeout cannot exceed the cache duration.
@@ -225,8 +223,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    */
   private transformCacheKey(key: INPUT): string {
     // Use custom transformation if provided
-    if (this.config.cacheKeyTransform) {
-      return this.config.cacheKeyTransform(key);
+    if (this.config?.cachePolicy?.cacheKeyTransform) {
+      return this.config.cachePolicy.cacheKeyTransform(key);
     }
     return cacheKeyTransformDefaultFn(key);
   }
@@ -289,11 +287,11 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     const awaitedTasks = this.tasks.filter(
       (t) => t.status == CacheTaskStatusType.AWAIT,
     );
-    if (!this.config.concurrency) {
+    if (!this.concurrency) {
       queuedTasks.forEach((task) => task.run());
       return;
     }
-    const availableSlots = this.config.concurrency - awaitedTasks.length;
+    const availableSlots = this.concurrency - awaitedTasks.length;
     if (availableSlots <= 0) return;
     const tasksToRun = queuedTasks.slice(0, availableSlots);
     tasksToRun.forEach((task) => {
