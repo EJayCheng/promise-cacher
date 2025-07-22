@@ -31,7 +31,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   public createdAt: number = Date.now();
 
   /** Timestamp when this cache task was last accessed */
-  public lastAccessedAt: number;
+  public lastAccessedAt: number = Date.now();
 
   /** Timestamp when the async operation was resolved (success or error) */
   public resolvedAt: number;
