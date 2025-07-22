@@ -312,7 +312,39 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     }
 
     // Get the result
-    const result = await this.taskMap.get(taskKey).output();
+    let result;
+    try {
+      result = await this.taskMap.get(taskKey).output();
+    } catch (error) {
+      // Record error metrics
+      this.performanceMetrics.errorCount++;
+
+      // Record response time (error case)
+      const responseTime = Date.now() - startTime;
+      this.performanceMetrics.responseTimes.push(responseTime);
+
+      // Limit arrays to prevent memory growth
+      if (this.performanceMetrics.responseTimes.length > 1000) {
+        this.performanceMetrics.responseTimes.shift();
+      }
+
+      // Record in recent response times for trend analysis
+      this.performanceMetrics.recentResponseTimes.push(responseTime);
+      if (this.performanceMetrics.recentResponseTimes.length > 100) {
+        this.performanceMetrics.recentResponseTimes.shift();
+      }
+
+      // Record specific type of response time (error case)
+      if (!isFromCache) {
+        this.performanceMetrics.fetchResponseTimes.push(responseTime);
+        if (this.performanceMetrics.fetchResponseTimes.length > 1000) {
+          this.performanceMetrics.fetchResponseTimes.shift();
+        }
+      }
+
+      // Re-throw the error to maintain the original API behavior
+      throw error;
+    }
 
     // Record response time
     const responseTime = Date.now() - startTime;
@@ -694,10 +726,11 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * Calculates health metrics.
    */
   private calculateHealthMetrics(hitRate: number) {
-    const { errorCount = 0, timeoutCount = 0 } = this.performanceMetrics;
     const totalRequests = this.performanceMetrics.usedCount;
     const errorRate =
-      totalRequests > 0 ? (errorCount / totalRequests) * 100 : 0;
+      totalRequests > 0
+        ? (this.performanceMetrics.errorCount / totalRequests) * 100
+        : 0;
 
     // Calculate health score
     let healthScore = 100;
@@ -715,7 +748,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       issues.push(`High error rate (${errorRate.toFixed(1)}%)`);
     if (this.usedMemoryBytes > this.maxMemoryMegaByte * 0.9)
       issues.push('Memory usage approaching limit');
-    if (timeoutCount > 0) issues.push(`${timeoutCount} timeout(s) occurred`);
+    if (this.performanceMetrics.timeoutCount > 0)
+      issues.push(
+        `${this.performanceMetrics.timeoutCount} timeout(s) occurred`,
+      );
 
     let status: 'excellent' | 'good' | 'warning' | 'critical';
     if (healthScore >= 90) status = 'excellent';
@@ -728,8 +764,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       score: Math.max(0, healthScore),
       issues,
       errorRate: Number(errorRate.toFixed(2)),
-      recentErrors: errorCount,
-      timeouts: timeoutCount,
+      recentErrors: this.performanceMetrics.errorCount,
+      timeouts: this.performanceMetrics.timeoutCount,
     };
   }
 

@@ -1,6 +1,6 @@
 /**
  * Concurrent Operations Demo for Promise Cacher
- * 
+ *
  * This demo specifically focuses on demonstrating the CURRENT OPERATIONS
  * metrics in various concurrency scenarios to help users understand:
  * - Active vs Queued requests
@@ -9,17 +9,24 @@
  * - Request rejection scenarios
  */
 
-import { PromiseCacher, ErrorTaskPolicyType, ExpirationStrategyType } from '../index';
+import {
+  ErrorTaskPolicyType,
+  ExpirationStrategyType,
+  PromiseCacher,
+} from '../index';
 
 // Mock API with varying delays to simulate realistic scenarios
-const mockSlowApiCall = async (userId: string, delay: number = 100): Promise<{ id: string; data: string }> => {
-  await new Promise(resolve => setTimeout(resolve, delay));
-  
+const mockSlowApiCall = async (
+  userId: string,
+  delay: number = 100,
+): Promise<{ id: string; data: string }> => {
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
   // Simulate occasional errors
   if (Math.random() < 0.15) {
     throw new Error(`API temporarily unavailable for ${userId}`);
   }
-  
+
   return {
     id: userId,
     data: `User data for ${userId}`,
@@ -42,7 +49,7 @@ async function demonstrateConcurrentOperations() {
         expirationStrategy: ExpirationStrategyType.EXPIRE,
         errorTaskPolicy: ErrorTaskPolicyType.IGNORE,
       },
-    }
+    },
   );
 
   console.log('📋 Test Configuration:');
@@ -54,7 +61,7 @@ async function demonstrateConcurrentOperations() {
   // Scenario 1: Sequential requests (baseline)
   console.log('🔸 Scenario 1: Sequential Requests (Baseline)');
   console.log('Making 3 sequential requests to establish baseline...');
-  
+
   for (let i = 1; i <= 3; i++) {
     try {
       const startTime = Date.now();
@@ -96,7 +103,9 @@ async function demonstrateConcurrentOperations() {
 
   // Scenario 3: Concurrent requests exceeding limit
   console.log('\n🔸 Scenario 3: Concurrent Requests Exceeding Limit');
-  console.log('Launching 8 concurrent requests (exceeding concurrency limit of 3)...');
+  console.log(
+    'Launching 8 concurrent requests (exceeding concurrency limit of 3)...',
+  );
 
   const exceedingLimitPromises = [];
   for (let i = 1; i <= 8; i++) {
@@ -108,7 +117,9 @@ async function demonstrateConcurrentOperations() {
   console.log('\n⏳ Monitoring queue buildup...');
   const monitorInterval = setInterval(() => {
     const currentStats = cacher.statistics();
-    console.log(`📊 Queue Status: Active=${currentStats.operations.activeRequests}, Queued=${currentStats.operations.queuedRequests}, Peak=${currentStats.operations.peakConcurrency}`);
+    console.log(
+      `📊 Queue Status: Active=${currentStats.operations.activeRequests}, Queued=${currentStats.operations.queuedRequests}, Peak=${currentStats.operations.peakConcurrency}`,
+    );
   }, 100);
 
   await Promise.allSettled(exceedingLimitPromises);
@@ -144,7 +155,9 @@ async function demonstrateConcurrentOperations() {
 
   const cacheHitPromises = [];
   for (let i = 1; i <= 5; i++) {
-    cacheHitPromises.push(trackRequest(`seq-user${(i % 3) + 1}`, cacher, 'hit'));
+    cacheHitPromises.push(
+      trackRequest(`seq-user${(i % 3) + 1}`, cacher, 'hit'),
+    );
   }
 
   await Promise.allSettled(cacheHitPromises);
@@ -161,7 +174,11 @@ async function demonstrateConcurrentOperations() {
   console.log('\n🧹 Demo completed, cache cleared');
 }
 
-async function trackRequest(userId: string, cacher: PromiseCacher, type: string = 'normal'): Promise<void> {
+async function trackRequest(
+  userId: string,
+  cacher: PromiseCacher,
+  type: string = 'normal',
+): Promise<void> {
   const startTime = Date.now();
   try {
     await cacher.get(userId);
@@ -169,7 +186,9 @@ async function trackRequest(userId: string, cacher: PromiseCacher, type: string 
     console.log(`✅ ${type} request for ${userId} completed in ${duration}ms`);
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.log(`❌ ${type} request for ${userId} failed in ${duration}ms: ${error.message}`);
+    console.log(
+      `❌ ${type} request for ${userId} failed in ${duration}ms: ${error.message}`,
+    );
   }
 }
 
@@ -179,15 +198,21 @@ function displayOperationsDetail(operations: any) {
   console.log(`   🎯 Concurrency Limit: ${operations.concurrencyLimit}`);
   console.log(`   ❌ Rejected Requests: ${operations.rejectedRequests}`);
   console.log(`   📈 Peak Concurrency: ${operations.peakConcurrency}`);
-  
+
   // Operational insights
   const totalActive = operations.activeRequests + operations.queuedRequests;
   if (totalActive > operations.concurrencyLimit) {
-    console.log(`   ⚠️  System is under load (${totalActive} requests > ${operations.concurrencyLimit} limit)`);
+    console.log(
+      `   ⚠️  System is under load (${totalActive} requests > ${operations.concurrencyLimit} limit)`,
+    );
   } else if (operations.activeRequests === operations.concurrencyLimit) {
-    console.log(`   🔥 System at full capacity (${operations.activeRequests}/${operations.concurrencyLimit})`);
+    console.log(
+      `   🔥 System at full capacity (${operations.activeRequests}/${operations.concurrencyLimit})`,
+    );
   } else if (operations.activeRequests > 0) {
-    console.log(`   ✅ System operating normally (${operations.activeRequests}/${operations.concurrencyLimit})`);
+    console.log(
+      `   ✅ System operating normally (${operations.activeRequests}/${operations.concurrencyLimit})`,
+    );
   } else {
     console.log(`   😴 System idle (0 active requests)`);
   }
@@ -195,12 +220,14 @@ function displayOperationsDetail(operations: any) {
 
 function displayFullStatistics(stats: any) {
   console.log('══════════════════════════════════════════');
-  
+
   // 🎯 EFFICIENCY METRICS
   console.log('🎯 CACHE EFFICIENCY');
   console.log(`   Hit Rate: ${stats.efficiency.hitRate}%`);
   console.log(`   Total Requests: ${stats.efficiency.totalRequests}`);
-  console.log(`   Cache Hits: ${stats.efficiency.hits} | Misses: ${stats.efficiency.misses}`);
+  console.log(
+    `   Cache Hits: ${stats.efficiency.hits} | Misses: ${stats.efficiency.misses}`,
+  );
 
   // 🔄 OPERATIONS STATUS (DETAILED)
   console.log('\n🔄 CURRENT OPERATIONS (DETAILED)');
@@ -208,18 +235,26 @@ function displayFullStatistics(stats: any) {
 
   // ⚡ PERFORMANCE INSIGHTS
   console.log('\n⚡ PERFORMANCE INSIGHTS');
-  console.log(`   Cached Response Avg: ${stats.performance.avgCachedResponseTime}ms`);
-  console.log(`   Fresh Fetch Avg: ${stats.performance.avgFetchResponseTime}ms`);
+  console.log(
+    `   Cached Response Avg: ${stats.performance.avgCachedResponseTime}ms`,
+  );
+  console.log(
+    `   Fresh Fetch Avg: ${stats.performance.avgFetchResponseTime}ms`,
+  );
   console.log(`   Performance Gain: ${stats.performance.performanceGain}%`);
 
   // 💾 MEMORY MANAGEMENT
   console.log('\n💾 MEMORY MANAGEMENT');
-  console.log(`   Current Usage: ${stats.memory.currentUsage} (${stats.memory.usagePercentage}%)`);
+  console.log(
+    `   Current Usage: ${stats.memory.currentUsage} (${stats.memory.usagePercentage}%)`,
+  );
   console.log(`   Total Items: ${stats.inventory.totalItems}`);
 
   // ⚠️ SYSTEM HEALTH
   console.log('\n⚠️ SYSTEM HEALTH');
-  console.log(`   Status: ${getHealthStatusEmoji(stats.health.status)} ${stats.health.status.toUpperCase()}`);
+  console.log(
+    `   Status: ${getHealthStatusEmoji(stats.health.status)} ${stats.health.status.toUpperCase()}`,
+  );
   console.log(`   Health Score: ${stats.health.score}/100`);
 
   console.log('══════════════════════════════════════════\n');
@@ -227,11 +262,16 @@ function displayFullStatistics(stats: any) {
 
 function getHealthStatusEmoji(status: string): string {
   switch (status) {
-    case 'excellent': return '🟢';
-    case 'good': return '🟡';
-    case 'warning': return '🟠';
-    case 'critical': return '🔴';
-    default: return '⚪';
+    case 'excellent':
+      return '🟢';
+    case 'good':
+      return '🟡';
+    case 'warning':
+      return '🟠';
+    case 'critical':
+      return '🔴';
+    default:
+      return '⚪';
   }
 }
 
