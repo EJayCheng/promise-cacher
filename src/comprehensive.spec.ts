@@ -106,8 +106,8 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should handle minMemoryByte greater than maxMemoryByte', async () => {
       const config: CacherConfig = {
         freeUpMemoryPolicy: {
-          maxMemoryByte: 100,
-          minMemoryByte: 200, // Invalid: min > max
+          maxMemoryBytes: 100,
+          minMemoryBytes: 200, // Invalid: min > max
         },
       };
 
@@ -124,10 +124,12 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should handle aggressive memory cleanup', async () => {
       const config: CacherConfig = {
         freeUpMemoryPolicy: {
-          maxMemoryByte: 1, // Very small limit
-          minMemoryByte: 0,
+          maxMemoryBytes: 1, // Very small limit
+          minMemoryBytes: 0,
         },
-        flushInterval: 50,
+        cachePolicy: {
+          flushIntervalMs: 50, // Short flush interval for testing
+        },
       };
 
       cacher = new PromiseCacher(async (key: string) => {
@@ -153,8 +155,12 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Timeout Handling', () => {
     it('should handle timeout correctly', async () => {
       const config: CacherConfig = {
-        timeoutMillisecond: 50,
-        cacheMillisecond: 1000,
+        fetchingPolicy: {
+          timeoutMs: 50, // Short timeout for testing
+        },
+        cachePolicy: {
+          ttlMs: 1000,
+        },
       };
 
       mockFetchFn.mockImplementation(async () => {

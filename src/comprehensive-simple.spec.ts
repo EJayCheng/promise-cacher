@@ -59,7 +59,9 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Concurrent Request Limiting', () => {
     beforeEach(() => {
       const config: CacherConfig = {
-        maxConcurrentRequests: 2,
+        fetchingPolicy: {
+          concurrency: 2,
+        },
       };
 
       cacher = new PromiseCacher(async (key: string) => {
@@ -134,7 +136,10 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Error Handling Policies', () => {
     it('should cache errors when errorTaskPolicy is CACHE', async () => {
       const config: CacherConfig = {
-        errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+        },
       };
 
       const error = new Error('Test error');
@@ -152,9 +157,12 @@ describe('Comprehensive PromiseCacher Tests', () => {
       expect(mockFetchFn).toHaveBeenCalledTimes(1);
     });
 
-    it('should release errors when errorTaskPolicy is RELEASE', async () => {
+    it('should release errors when errorTaskPolicy is IGNORE', async () => {
       const config: CacherConfig = {
-        errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.IGNORE,
+        },
       };
 
       mockFetchFn
@@ -179,9 +187,11 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Cache Expiration Policies', () => {
     it('should expire cache based on time (EXPIRE policy)', async () => {
       const config: CacherConfig = {
-        cacheMillisecond: 50,
-        expirePolicy: ExpirationStrategyType.EXPIRE,
-        flushInterval: 25,
+        cachePolicy: {
+          ttlMs: 50,
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          flushIntervalMs: 25,
+        },
       };
 
       mockFetchFn.mockImplementation(
@@ -238,7 +248,9 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Clone Behavior', () => {
     it('should return cloned objects when useClones is true', async () => {
       const config: CacherConfig = {
-        useClones: true,
+        fetchingPolicy: {
+          useClones: true,
+        },
       };
 
       const originalObject = { value: 'original', nested: { prop: 'data' } };
@@ -268,10 +280,14 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Configuration Edge Cases', () => {
     it('should handle reasonable configuration values', async () => {
       const config: CacherConfig = {
-        cacheMillisecond: 1000,
-        flushInterval: 500,
-        timeoutMillisecond: 100,
-        maxConcurrentRequests: 5,
+        cachePolicy: {
+          ttlMs: 1000,
+          flushIntervalMs: 500,
+        },
+        fetchingPolicy: {
+          timeoutMs: 100,
+          concurrency: 5,
+        },
       };
 
       cacher = new PromiseCacher(async () => 'result', config);

@@ -15,7 +15,9 @@ describe('Enhanced PromiseCacher Features', () => {
   describe('Concurrent Request Limiting', () => {
     beforeEach(() => {
       const config: CacherConfig = {
-        maxConcurrentRequests: 2,
+        fetchingPolicy: {
+          concurrency: 2,
+        },
       };
 
       cacher = new PromiseCacher(async (key: string) => {
@@ -229,7 +231,9 @@ describe('Enhanced PromiseCacher Features', () => {
   describe('Enhanced Clear Method', () => {
     beforeEach(() => {
       const config: CacherConfig = {
-        maxConcurrentRequests: 5,
+        fetchingPolicy: {
+          concurrency: 5,
+        },
       };
 
       cacher = new PromiseCacher(async (key: string) => {

@@ -142,16 +142,18 @@ describe('TransformCacheKey - Same Key Same Cache', () => {
       const customCacher = new PromiseCacher(
         async (key: any) => `result-${JSON.stringify(key)}`,
         {
-          cacheKeyTransform: (input: any) => {
-            // Custom transform that ignores case for string values
-            if (typeof input === 'string') {
-              return input.toLowerCase();
-            }
-            if (typeof input === 'object' && input !== null) {
-              const normalized = JSON.stringify(input).toLowerCase();
-              return normalized;
-            }
-            return String(input);
+          cachePolicy: {
+            cacheKeyTransform: (input: any) => {
+              // Custom transform that ignores case for string values
+              if (typeof input === 'string') {
+                return input.toLowerCase();
+              }
+              if (typeof input === 'object' && input !== null) {
+                const normalized = JSON.stringify(input).toLowerCase();
+                return normalized;
+              }
+              return String(input);
+            },
           },
         },
       );
