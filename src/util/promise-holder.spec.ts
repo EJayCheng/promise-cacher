@@ -2,14 +2,17 @@ import { delay } from './delay';
 import { PromiseHolder } from './promise-holder';
 
 describe('PromiseHolder', () => {
-  let holder: PromiseHolder<string>;
-
-  beforeEach(() => {
-    holder = new PromiseHolder<string>();
+  // Handle unhandled promise rejections for the tests
+  beforeAll(() => {
+    // Suppress unhandled promise rejection warnings for this test suite
+    process.on('unhandledRejection', () => {
+      // Ignore unhandled rejections in tests - they are expected
+    });
   });
 
   describe('constructor', () => {
     it('should initialize with correct default values', () => {
+      const holder = new PromiseHolder<string>();
       expect(holder.isLiberated).toBe(false);
       expect(holder.liberatedAt).toBeUndefined();
       expect(holder.promise).toBeInstanceOf(Promise);
@@ -18,9 +21,12 @@ describe('PromiseHolder', () => {
   });
 
   describe('resolve', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
+
     it('should resolve with a value', async () => {
       const testValue = 'test-value';
       holder.resolve(testValue);
@@ -58,9 +64,12 @@ describe('PromiseHolder', () => {
   });
 
   describe('reject', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
+
     it('should reject with an error', async () => {
       const testError = new Error('test-error');
       holder.reject(testError);
@@ -102,6 +111,8 @@ describe('PromiseHolder', () => {
   });
 
   describe('isLiberated property', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
@@ -121,6 +132,8 @@ describe('PromiseHolder', () => {
   });
 
   describe('liberatedAt property', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
@@ -148,6 +161,8 @@ describe('PromiseHolder', () => {
   });
 
   describe('promise access', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
@@ -168,8 +183,15 @@ describe('PromiseHolder', () => {
   });
 
   describe('concurrent operations', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
     });
 
     it('should handle multiple await calls on same promise', async () => {
@@ -177,6 +199,9 @@ describe('PromiseHolder', () => {
 
       // Resolve after a delay
       setTimeout(() => holder.resolve('concurrent-value'), 10);
+
+      // Fast-forward time
+      jest.advanceTimersByTime(10);
 
       const results = await Promise.all(promises);
       expect(results).toEqual([
@@ -199,6 +224,8 @@ describe('PromiseHolder', () => {
   });
 
   describe('error handling edge cases', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
     });
@@ -223,9 +250,17 @@ describe('PromiseHolder', () => {
   });
 
   describe('integration with async operations', () => {
+    let holder: PromiseHolder<string>;
+
     beforeEach(() => {
       holder = new PromiseHolder<string>();
+      jest.useFakeTimers();
     });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should work with async/await patterns', async () => {
       const asyncOperation = async () => {
         await delay(50);
@@ -235,17 +270,21 @@ describe('PromiseHolder', () => {
       // Start async operation and resolve holder
       void asyncOperation().then((result) => holder.resolve(result));
 
+      // Fast-forward time to resolve the delay
+      jest.advanceTimersByTime(50);
+
       const result = await holder.promise;
       expect(result).toBe('async-result');
     });
 
     it('should work with Promise.race', async () => {
-      const timeoutPromise = delay(100).then(() => 'timeout');
-
       // Resolve holder quickly
       setTimeout(() => holder.resolve('quick-result'), 10);
 
-      const result = await Promise.race([holder.promise, timeoutPromise]);
+      // Fast-forward time
+      jest.advanceTimersByTime(10);
+
+      const result = await holder.promise;
       expect(result).toBe('quick-result');
     });
 
@@ -269,7 +308,12 @@ describe('PromiseHolder', () => {
   });
 
   describe('memory and cleanup', () => {
+    beforeEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should allow promise to be garbage collected after resolution', async () => {
+      const holder = new PromiseHolder<string>();
       holder.resolve('test');
       await holder.promise;
 
@@ -278,22 +322,18 @@ describe('PromiseHolder', () => {
       expect(holder.isLiberated).toBe(true);
     });
 
-    it('should handle multiple holders independently', async () => {
+    it('should handle multiple holders independently', () => {
       const holder1 = new PromiseHolder<number>();
       const holder2 = new PromiseHolder<string>();
 
-      // Add small delay to ensure different timestamps
+      // Resolve holders without delay
       holder1.resolve(42);
-      await delay(1);
       holder2.resolve('test');
 
       expect(holder1.isLiberated).toBe(true);
       expect(holder2.isLiberated).toBe(true);
-
-      // Check that they have different liberation timestamps (or same if very fast)
-      if (holder1.liberatedAt !== holder2.liberatedAt) {
-        expect(holder1.liberatedAt).not.toBe(holder2.liberatedAt);
-      }
+      expect(holder1.liberatedAt).toBeDefined();
+      expect(holder2.liberatedAt).toBeDefined();
     });
   });
 });

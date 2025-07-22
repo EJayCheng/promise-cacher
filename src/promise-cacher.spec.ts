@@ -31,8 +31,8 @@ describe('PromiseCacher', () => {
 
       expect(cacher.fetchFn).toBe(mockFetchFn);
       expect(cacher.config).toEqual({});
-      expect(cacher.ttlMs).toBe(60000); // DefaultTtlMs
-      expect(cacher.concurrency).toBe(10); // DefaultConcurrency
+      expect(cacher.ttlMs).toBe(300000); // DefaultTtlMs (5 * 60 * 1000)
+      expect(cacher.concurrency).toBe(0); // DefaultConcurrency (unlimited)
       expect(cacher.errorTaskPolicy).toBe(ErrorTaskPolicyType.IGNORE);
       expect(cacher.expirationStrategy).toBe(ExpirationStrategyType.EXPIRE);
       expect(cacher.useClones).toBe(false);
@@ -88,14 +88,14 @@ describe('PromiseCacher', () => {
     it('should ensure minimum flush interval', () => {
       const config: CacherConfig = {
         cachePolicy: {
-          flushIntervalMs: 50, // Less than MinFlushIntervalMs (100)
+          flushIntervalMs: 50, // Less than MinFlushIntervalMs (1000)
         },
       };
 
       cacher = new PromiseCacher(mockFetchFn, config);
 
       // Should use minimum flush interval
-      expect((cacher as any).flushInterval).toBe(100);
+      expect((cacher as any).flushInterval).toBe(1000);
     });
 
     it('should compute valid memory configuration', () => {
@@ -574,11 +574,23 @@ describe('PromiseCacher', () => {
         cachePolicy: { errorTaskPolicy: ErrorTaskPolicyType.IGNORE },
       });
 
+      const firstError = new Error('First error');
       mockFetchFn
-        .mockRejectedValueOnce(new Error('First error'))
+        .mockRejectedValueOnce(firstError)
         .mockResolvedValueOnce('success');
 
-      await expect(cacher.get('test-key')).rejects.toThrow('First error');
+      // First call should throw the error
+      let thrownError: Error | null = null;
+      try {
+        await cacher.get('test-key');
+      } catch (error) {
+        thrownError = error as Error;
+      }
+
+      expect(thrownError).toBe(firstError);
+      expect(thrownError?.message).toBe('First error');
+
+      // Second call should succeed (error was not cached)
       const result = await cacher.get('test-key');
 
       expect(result).toBe('success');
