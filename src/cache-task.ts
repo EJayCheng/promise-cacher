@@ -122,7 +122,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
       })
       .catch((error) => {
         this.taskError = error;
-        if (this.cacher.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
+        if (this.cacher.errorTaskPolicy == ErrorTaskPolicyType.IGNORE) {
           // Delay release to avoid immediate cleanup during error handling
           setTimeout(() => {
             this.release();

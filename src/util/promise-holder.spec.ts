@@ -2,12 +2,29 @@ import { delay } from './delay';
 import { PromiseHolder } from './promise-holder';
 
 describe('PromiseHolder', () => {
+  let originalUnhandledRejection: any;
+
   // Handle unhandled promise rejections for the tests
   beforeAll(() => {
-    // Suppress unhandled promise rejection warnings for this test suite
-    process.on('unhandledRejection', () => {
-      // Ignore unhandled rejections in tests - they are expected
+    // Store original handler
+    originalUnhandledRejection = process.listeners('unhandledRejection');
+
+    // Remove existing handlers and add our own
+    process.removeAllListeners('unhandledRejection');
+    process.on('unhandledRejection', (reason, promise) => {
+      // Silently handle expected rejections in tests
+      console.debug('Suppressed unhandled rejection in test:', reason);
     });
+  });
+
+  afterAll(() => {
+    // Restore original unhandled rejection handlers
+    process.removeAllListeners('unhandledRejection');
+    if (originalUnhandledRejection) {
+      originalUnhandledRejection.forEach((handler: any) => {
+        process.on('unhandledRejection', handler);
+      });
+    }
   });
 
   describe('constructor', () => {
@@ -54,8 +71,11 @@ describe('PromiseHolder', () => {
       );
     });
 
-    it('should not allow resolve after reject', () => {
+    it('should not allow resolve after reject', async () => {
       holder.reject(new Error('rejected'));
+
+      // Catch the rejected promise to prevent unhandled rejection
+      await expect(holder.promise).rejects.toThrow('rejected');
 
       expect(() => holder.resolve('value')).toThrow(
         'Cannot resolve a PromiseHolder that has already been liberated.',
@@ -93,16 +113,22 @@ describe('PromiseHolder', () => {
       expect(holder.isLiberated).toBe(true);
     });
 
-    it('should throw error when rejecting already liberated holder', () => {
+    it('should throw error when rejecting already liberated holder', async () => {
       holder.reject(new Error('first-error'));
+
+      // Consume the rejected promise to prevent unhandled rejection
+      await expect(holder.promise).rejects.toThrow('first-error');
 
       expect(() => holder.reject(new Error('second-error'))).toThrow(
         'Cannot reject a PromiseHolder that has already been liberated.',
       );
     });
 
-    it('should not allow reject after resolve', () => {
+    it('should not allow reject after resolve', async () => {
       holder.resolve('value');
+
+      // Consume the resolved promise
+      await expect(holder.promise).resolves.toBe('value');
 
       expect(() => holder.reject(new Error('error'))).toThrow(
         'Cannot reject a PromiseHolder that has already been liberated.',
@@ -125,8 +151,12 @@ describe('PromiseHolder', () => {
       expect(holder.isLiberated).toBe(true);
     });
 
-    it('should be true after reject', () => {
+    it('should be true after reject', async () => {
       holder.reject(new Error('error'));
+
+      // Consume the rejected promise to prevent unhandled rejection
+      await expect(holder.promise).rejects.toThrow('error');
+
       expect(holder.isLiberated).toBe(true);
     });
   });
@@ -150,10 +180,13 @@ describe('PromiseHolder', () => {
       expect(holder.liberatedAt).toBeLessThanOrEqual(afterTime);
     });
 
-    it('should be set when rejected', () => {
+    it('should be set when rejected', async () => {
       const beforeTime = Date.now();
       holder.reject(new Error('error'));
       const afterTime = Date.now();
+
+      // Consume the rejected promise to prevent unhandled rejection
+      await expect(holder.promise).rejects.toThrow('error');
 
       expect(holder.liberatedAt).toBeGreaterThanOrEqual(beforeTime);
       expect(holder.liberatedAt).toBeLessThanOrEqual(afterTime);
@@ -191,6 +224,8 @@ describe('PromiseHolder', () => {
     });
 
     afterEach(() => {
+      // Clean up any pending timers before switching to real timers
+      jest.clearAllTimers();
       jest.useRealTimers();
     });
 
@@ -258,6 +293,8 @@ describe('PromiseHolder', () => {
     });
 
     afterEach(() => {
+      // Clean up any pending timers before switching to real timers
+      jest.clearAllTimers();
       jest.useRealTimers();
     });
 
@@ -268,13 +305,20 @@ describe('PromiseHolder', () => {
       };
 
       // Start async operation and resolve holder
-      void asyncOperation().then((result) => holder.resolve(result));
+      const operation = asyncOperation()
+        .then((result) => holder.resolve(result))
+        .catch(() => {
+          // Handle any errors to prevent unhandled rejections
+        });
 
       // Fast-forward time to resolve the delay
       jest.advanceTimersByTime(50);
 
       const result = await holder.promise;
       expect(result).toBe('async-result');
+
+      // Ensure the operation completes
+      await operation;
     });
 
     it('should work with Promise.race', async () => {

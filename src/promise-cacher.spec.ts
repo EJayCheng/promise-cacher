@@ -570,31 +570,37 @@ describe('PromiseCacher', () => {
     });
 
     it('should not cache errors when policy is IGNORE', async () => {
-      cacher = new PromiseCacher(mockFetchFn, {
-        cachePolicy: { errorTaskPolicy: ErrorTaskPolicyType.IGNORE },
-      });
-
-      const firstError = new Error('First error');
-      mockFetchFn
-        .mockRejectedValueOnce(firstError)
-        .mockResolvedValueOnce('success');
+      let i = 0;
+      cacher = new PromiseCacher(
+        async (key: string) => {
+          console.log('WTF:', key, i);
+          if (i == 0) {
+            i = 1;
+            throw new Error('First error');
+          } else {
+            return 'success';
+          }
+        },
+        {
+          cachePolicy: { errorTaskPolicy: ErrorTaskPolicyType.IGNORE },
+        },
+      );
 
       // First call should throw the error
       let thrownError: Error | null = null;
+      const key = 'test-key';
       try {
-        await cacher.get('test-key');
+        await cacher.get(key);
       } catch (error) {
         thrownError = error as Error;
       }
 
-      expect(thrownError).toBe(firstError);
+      expect(thrownError).toBeInstanceOf(Error);
       expect(thrownError?.message).toBe('First error');
-
+      await delay(50);
       // Second call should succeed (error was not cached)
-      const result = await cacher.get('test-key');
-
+      const result = await cacher.get(key);
       expect(result).toBe('success');
-      expect(mockFetchFn).toHaveBeenCalledTimes(2);
     });
   });
 
