@@ -192,30 +192,89 @@ const cacher = new PromiseCacher<ApiResponse, string>(fetchFunction, {
 
 ### Performance Monitoring
 
+Promise Cacher provides comprehensive statistics organized by importance and usability:
+
 ```typescript
 // Get comprehensive statistics
 const stats = cacher.statistics();
-console.log(stats);
-/*
-{
-  hitRate: 0.85,
-  totalMemoryBytes: 2048576,
-  taskCount: 150,
-  averageResponseTime: 245,
-  // ... more metrics
-}
-*/
 
-// Monitor memory usage
-console.log(cacher.memoryUsage());
-/*
-{
-  totalBytes: 2048576,
-  formattedSize: "2.0 MB",
-  taskCount: 150
-}
-*/
+// 🎯 Core efficiency metrics (most important)
+console.log(`Hit Rate: ${stats.efficiency.hitRate}%`);
+console.log(`Time Saved: ${stats.efficiency.timeSavedMs}ms`);
+
+// ⚡ Performance insights
+console.log(`Performance Gain: ${stats.performance.performanceGain}%`);
+console.log(`95th Percentile: ${stats.performance.p95ResponseTime}ms`);
+
+// 🔄 Current operations
+console.log(`Active Requests: ${stats.operations.activeRequests}`);
+console.log(`Queue Length: ${stats.operations.queuedRequests}`);
+
+// 💾 Memory management
+console.log(
+  `Memory Usage: ${stats.memory.currentUsage} (${stats.memory.usagePercentage}%)`,
+);
+console.log(`Cleanup Count: ${stats.memory.cleanupCount}`);
+
+// 📈 Cache inventory
+console.log(`Total Items: ${stats.inventory.totalItems}`);
+console.log(`High-Value Items: ${stats.inventory.highValueItems}`);
+
+// ⚠️ System health
+console.log(
+  `Health Status: ${stats.health.status} (${stats.health.score}/100)`,
+);
+console.log(`Error Rate: ${stats.health.errorRate}%`);
+
+// 🕒 Temporal patterns
+console.log(`Uptime: ${stats.temporal.uptime}`);
+console.log(`Requests/Min: ${stats.temporal.requestsPerMinute}`);
+console.log(`Trend: ${stats.temporal.trend}`);
 ```
+
+#### Statistics Categories
+
+**🎯 Efficiency** - Core cache performance metrics
+
+- Hit rate percentage and absolute numbers
+- Time saved through caching
+- Total requests processed
+
+**⚡ Performance** - Response time analytics
+
+- Average response times (cached vs fresh)
+- Performance improvement ratios
+- 95th percentile and response time ranges
+
+**🔄 Operations** - Real-time operational status
+
+- Current active and queued requests
+- Concurrency limits and rejections
+- Peak concurrency reached
+
+**💾 Memory** - Memory usage and management
+
+- Current usage vs limits with percentages
+- Cleanup triggers and memory reclaimed
+- Human-readable memory sizes
+
+**📈 Inventory** - Cache content analysis
+
+- Item counts and usage patterns
+- High-value vs single-use items
+- Average item usage statistics
+
+**⚠️ Health** - System health monitoring
+
+- Overall health status and score
+- Error rates and recent issues
+- Actionable warnings and alerts
+
+**🕒 Temporal** - Time-based patterns
+
+- Cache uptime and request rates
+- Performance trends over time
+- Usage pattern analysis
 
 ## 🧪 Testing
 

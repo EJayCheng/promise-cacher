@@ -108,8 +108,8 @@ describe('PromiseCacher Integration Tests', () => {
 
       const stats = cacher.statistics();
       // Memory cleanup should have been triggered or cache count reduced
-      expect(stats.overMemoryLimitCount >= 0).toBe(true);
-      expect(stats.cacheCount >= 0).toBe(true);
+      expect(stats.memory.cleanupCount >= 0).toBe(true);
+      expect(stats.inventory.totalItems >= 0).toBe(true);
     });
 
     it('should maintain data consistency during rapid cache operations', async () => {
@@ -300,7 +300,7 @@ describe('PromiseCacher Integration Tests', () => {
       }
 
       const finalStats = cacher.statistics();
-      expect(finalStats.cacheCount).toBeGreaterThanOrEqual(0);
+      expect(finalStats.inventory.totalItems).toBeGreaterThanOrEqual(0);
       expect(totalOperations).toBeGreaterThan(0);
     });
 
@@ -418,7 +418,7 @@ describe('PromiseCacher Integration Tests', () => {
 
       const stats = cacher.statistics();
       // With zero limit, cache should still work but may trigger cleanup
-      expect(stats.cacheCount).toBeGreaterThanOrEqual(0);
+      expect(stats.inventory.totalItems).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle extremely short TTL values', async () => {

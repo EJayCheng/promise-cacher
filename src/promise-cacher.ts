@@ -44,6 +44,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   /** Performance and usage tracking */
   private performanceMetrics: PerformanceMetrics = {
     responseTimes: [],
+    cachedResponseTimes: [],
+    fetchResponseTimes: [],
     totalFetchCount: 0,
     currentConcurrentRequests: 0,
     maxConcurrentRequestsReached: 0,
@@ -51,6 +53,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     overMemoryLimitCount: 0,
     usedCount: 0,
     releasedMemoryBytes: 0,
+    timeoutCount: 0,
+    errorCount: 0,
+    createdAt: Date.now(),
+    recentResponseTimes: [],
   };
 
   /** Pre-computed configuration values for optimal performance */
@@ -265,19 +271,80 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    * @returns Promise resolving to the cached or freshly fetched value
    */
   public async get(key: INPUT, forceUpdate: boolean = false): Promise<OUTPUT> {
+    const startTime = Date.now();
     this.performanceMetrics.usedCount++;
+
     const taskKey = this.transformCacheKey(key);
+    let isNewTask = false;
+    let isFromCache = false;
+
+    // Determine if we need to create a new task or can use existing cache
     if (forceUpdate || !this.taskMap.has(taskKey)) {
+      // No existing task or force update - create new task
       this.set(key);
-    }
-    if (this.taskMap.has(taskKey)) {
-      const cacheItem = this.taskMap.get(taskKey);
-      if (cacheItem.status == CacheTaskStatusType.EXPIRED) {
+      isNewTask = true;
+    } else {
+      // Check existing task status
+      const existingTask = this.taskMap.get(taskKey);
+      const status = existingTask.status;
+
+      if (status === CacheTaskStatusType.EXPIRED) {
+        // Task expired - create new task
         this.set(key);
+        isNewTask = true;
+      } else if (status === CacheTaskStatusType.ACTIVE) {
+        // Task is active (resolved and cached) - this is a cache hit
+        isFromCache = true;
+      } else if (
+        status === CacheTaskStatusType.AWAIT ||
+        status === CacheTaskStatusType.QUEUED
+      ) {
+        // Task is still pending - wait for it to complete
+        // This is not exactly a cache hit, but also not a new fetch
+        isFromCache = false;
+        isNewTask = false;
       }
     }
 
-    return this.taskMap.get(taskKey).output();
+    // If this is a new task, increment fetch count
+    if (isNewTask) {
+      this.performanceMetrics.totalFetchCount++;
+    }
+
+    // Get the result
+    const result = await this.taskMap.get(taskKey).output();
+
+    // Record response time
+    const responseTime = Date.now() - startTime;
+    this.performanceMetrics.responseTimes.push(responseTime);
+
+    // Limit arrays to prevent memory growth (keep last 1000 entries)
+    if (this.performanceMetrics.responseTimes.length > 1000) {
+      this.performanceMetrics.responseTimes.shift();
+    }
+
+    // Maintain recent response times for trend analysis (keep last 100)
+    this.performanceMetrics.recentResponseTimes.push(responseTime);
+    if (this.performanceMetrics.recentResponseTimes.length > 100) {
+      this.performanceMetrics.recentResponseTimes.shift();
+    }
+
+    // Record specific type of response time
+    if (isFromCache) {
+      this.performanceMetrics.cachedResponseTimes.push(responseTime);
+      // Limit cached response times array
+      if (this.performanceMetrics.cachedResponseTimes.length > 1000) {
+        this.performanceMetrics.cachedResponseTimes.shift();
+      }
+    } else {
+      this.performanceMetrics.fetchResponseTimes.push(responseTime);
+      // Limit fetch response times array
+      if (this.performanceMetrics.fetchResponseTimes.length > 1000) {
+        this.performanceMetrics.fetchResponseTimes.shift();
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -377,6 +444,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   private resetPerformanceMetrics(): void {
     this.performanceMetrics = {
       responseTimes: [],
+      cachedResponseTimes: [],
+      fetchResponseTimes: [],
       totalFetchCount: 0,
       currentConcurrentRequests: 0,
       maxConcurrentRequestsReached: 0,
@@ -384,6 +453,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       overMemoryLimitCount: 0,
       usedCount: 0,
       releasedMemoryBytes: 0,
+      timeoutCount: 0,
+      errorCount: 0,
+      createdAt: Date.now(),
+      recentResponseTimes: [],
     };
   }
 
@@ -417,81 +490,306 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
 
   /**
    * Provides comprehensive statistics about cache performance and usage.
+   * Reorganized to focus on metrics that users truly care about.
    *
-   * @returns Object containing detailed cache statistics
+   * @returns Object containing detailed cache statistics grouped by importance
    */
   public statistics(): PromiseCacherStatistics {
-    const usedCounts = this.tasks.map((t) => t.usedCount);
     const totalRequests = this.performanceMetrics.usedCount;
-    const totalFetchCount = this.performanceMetrics.totalFetchCount;
-    const cacheHits = totalRequests - totalFetchCount;
-    const cacheMisses = totalFetchCount;
+    const totalFetches = this.performanceMetrics.totalFetchCount;
+    const cacheHits = totalRequests - totalFetches;
     const hitRate = totalRequests > 0 ? (cacheHits / totalRequests) * 100 : 0;
 
-    return {
-      cacheCount: this.cacheCount,
-      usedMemory: sizeFormat(this.usedMemoryBytes),
-      usedMemoryBytes: this.usedMemoryBytes,
-      usedCountTotal: totalRequests,
-      hitRate: Number(hitRate.toFixed(2)),
+    // Calculate efficiency metrics
+    const efficiency = this.calculateEfficiencyMetrics(
+      totalRequests,
       cacheHits,
-      cacheMisses,
-      ...this.calculateUsageStatistics(usedCounts),
-      overMemoryLimitCount: this.performanceMetrics.overMemoryLimitCount,
-      releasedMemoryBytes: this.performanceMetrics.releasedMemoryBytes,
-      performance: this.calculatePerformanceStatistics(),
+      totalFetches,
+      hitRate,
+    );
+
+    // Calculate performance metrics
+    const performance = this.calculateAdvancedPerformanceMetrics();
+
+    // Calculate operational status
+    const operations = this.calculateOperationalMetrics();
+
+    // Calculate memory metrics
+    const memory = this.calculateMemoryMetrics();
+
+    // Calculate inventory metrics
+    const inventory = this.calculateInventoryMetrics();
+
+    // Calculate health metrics
+    const health = this.calculateHealthMetrics(hitRate);
+
+    // Calculate temporal metrics
+    const temporal = this.calculateTemporalMetrics(totalRequests);
+
+    return {
+      efficiency,
+      performance,
+      operations,
+      memory,
+      inventory,
+      health,
+      temporal,
     };
   }
 
   /**
-   * Calculates usage statistics from usage count data.
+   * Calculates cache efficiency metrics.
    */
-  private calculateUsageStatistics(usedCounts: number[]) {
+  private calculateEfficiencyMetrics(
+    totalRequests: number,
+    cacheHits: number,
+    cacheMisses: number,
+    hitRate: number,
+  ) {
+    // Estimate time saved based on average response times
+    const avgFetchTime =
+      this.performanceMetrics.fetchResponseTimes?.length > 0
+        ? this.performanceMetrics.fetchResponseTimes.reduce(
+            (sum, time) => sum + time,
+            0,
+          ) / this.performanceMetrics.fetchResponseTimes.length
+        : 0;
+
+    const avgCachedTime =
+      this.performanceMetrics.cachedResponseTimes?.length > 0
+        ? this.performanceMetrics.cachedResponseTimes.reduce(
+            (sum, time) => sum + time,
+            0,
+          ) / this.performanceMetrics.cachedResponseTimes.length
+        : 0;
+
+    const timeSavedMs =
+      avgFetchTime > 0 && cacheHits > 0
+        ? cacheHits * (avgFetchTime - avgCachedTime)
+        : undefined;
+
+    return {
+      hitRate: Number(hitRate.toFixed(2)),
+      hits: cacheHits,
+      misses: cacheMisses,
+      totalRequests,
+      timeSavedMs: timeSavedMs ? Number(timeSavedMs.toFixed(0)) : undefined,
+    };
+  }
+
+  /**
+   * Calculates advanced performance metrics.
+   */
+  private calculateAdvancedPerformanceMetrics() {
+    const { cachedResponseTimes = [], fetchResponseTimes = [] } =
+      this.performanceMetrics;
+
+    const avgCachedResponseTime =
+      cachedResponseTimes.length > 0
+        ? cachedResponseTimes.reduce((sum, time) => sum + time, 0) /
+          cachedResponseTimes.length
+        : 0;
+
+    const avgFetchResponseTime =
+      fetchResponseTimes.length > 0
+        ? fetchResponseTimes.reduce((sum, time) => sum + time, 0) /
+          fetchResponseTimes.length
+        : 0;
+
+    const performanceGain =
+      avgFetchResponseTime > 0
+        ? Number(
+            (
+              ((avgFetchResponseTime - avgCachedResponseTime) /
+                avgFetchResponseTime) *
+              100
+            ).toFixed(2),
+          )
+        : 0;
+
+    const allResponseTimes = this.performanceMetrics.responseTimes;
+    const sortedTimes = [...allResponseTimes].sort((a, b) => a - b);
+    const p95Index = Math.ceil(sortedTimes.length * 0.95) - 1;
+    const p95ResponseTime = sortedTimes.length > 0 ? sortedTimes[p95Index] : 0;
+
+    return {
+      avgCachedResponseTime: Number(avgCachedResponseTime.toFixed(2)),
+      avgFetchResponseTime: Number(avgFetchResponseTime.toFixed(2)),
+      performanceGain,
+      p95ResponseTime: Number(p95ResponseTime.toFixed(2)),
+      fastestResponse:
+        allResponseTimes.length > 0 ? Math.min(...allResponseTimes) : 0,
+      slowestResponse:
+        allResponseTimes.length > 0 ? Math.max(...allResponseTimes) : 0,
+    };
+  }
+
+  /**
+   * Calculates operational metrics.
+   */
+  private calculateOperationalMetrics() {
+    const queuedTasks = this.tasks.filter(
+      (t) => t.status === CacheTaskStatusType.QUEUED,
+    );
+
+    return {
+      activeRequests: this.performanceMetrics.currentConcurrentRequests,
+      queuedRequests: queuedTasks.length,
+      concurrencyLimit: this.concurrency,
+      rejectedRequests: this.performanceMetrics.rejectedRequestsCount,
+      peakConcurrency: this.performanceMetrics.maxConcurrentRequestsReached,
+    };
+  }
+
+  /**
+   * Calculates memory metrics.
+   */
+  private calculateMemoryMetrics() {
+    const currentUsageBytes = this.usedMemoryBytes;
+    const limitBytes = this.maxMemoryMegaByte;
+    const usagePercentage =
+      limitBytes > 0
+        ? Number(((currentUsageBytes / limitBytes) * 100).toFixed(2))
+        : 0;
+
+    return {
+      currentUsage: sizeFormat(currentUsageBytes),
+      currentUsageBytes,
+      usagePercentage,
+      limit: sizeFormat(limitBytes),
+      limitBytes,
+      cleanupCount: this.performanceMetrics.overMemoryLimitCount,
+      memoryReclaimed: sizeFormat(this.performanceMetrics.releasedMemoryBytes),
+      memoryReclaimedBytes: this.performanceMetrics.releasedMemoryBytes,
+    };
+  }
+
+  /**
+   * Calculates inventory metrics.
+   */
+  private calculateInventoryMetrics() {
+    const usedCounts = this.tasks.map((t) => t.usedCount);
     const hasData = usedCounts.length > 0;
 
+    const avgItemUsage = hasData
+      ? Number((this.performanceMetrics.usedCount / this.cacheCount).toFixed(2))
+      : 0;
+
+    const singleUseItems = usedCounts.filter((count) => count === 1).length;
+    const highValueItems = usedCounts.filter(
+      (count) => count > avgItemUsage,
+    ).length;
+
     return {
-      maxUsedCount: hasData ? Math.max(...usedCounts) : 0,
-      minUsedCount: hasData ? Math.min(...usedCounts) : 0,
-      avgUsedCount:
-        this.cacheCount > 0
-          ? this.performanceMetrics.usedCount / this.cacheCount
-          : 0,
+      totalItems: this.cacheCount,
+      avgItemUsage,
+      maxItemUsage: hasData ? Math.max(...usedCounts) : 0,
+      minItemUsage: hasData ? Math.min(...usedCounts) : 0,
+      singleUseItems,
+      highValueItems,
     };
   }
 
   /**
-   * Calculates performance statistics from response time data.
+   * Calculates health metrics.
    */
-  private calculatePerformanceStatistics() {
-    const responseTimes = this.performanceMetrics.responseTimes;
-    const hasResponseTimes = responseTimes.length > 0;
-    const awaitedTasks = this.tasks.filter(
-      (t) => t.status === CacheTaskStatusType.AWAIT,
-    );
-    let avgResponseTime = 0;
-    let minResponseTime = 0;
-    let maxResponseTime = 0;
+  private calculateHealthMetrics(hitRate: number) {
+    const { errorCount = 0, timeoutCount = 0 } = this.performanceMetrics;
+    const totalRequests = this.performanceMetrics.usedCount;
+    const errorRate =
+      totalRequests > 0 ? (errorCount / totalRequests) * 100 : 0;
 
-    if (hasResponseTimes) {
-      const sum = responseTimes.reduce((acc, time) => acc + time, 0);
-      avgResponseTime = sum / responseTimes.length;
-      minResponseTime = Math.min(...responseTimes);
-      maxResponseTime = Math.max(...responseTimes);
+    // Calculate health score
+    let healthScore = 100;
+    if (hitRate < 50) healthScore -= 30;
+    else if (hitRate < 70) healthScore -= 15;
+
+    if (errorRate > 10) healthScore -= 30;
+    else if (errorRate > 5) healthScore -= 15;
+
+    if (this.usedMemoryBytes > this.maxMemoryMegaByte * 0.9) healthScore -= 20;
+
+    const issues: string[] = [];
+    if (hitRate < 50) issues.push('Low cache hit rate (<50%)');
+    if (errorRate > 5)
+      issues.push(`High error rate (${errorRate.toFixed(1)}%)`);
+    if (this.usedMemoryBytes > this.maxMemoryMegaByte * 0.9)
+      issues.push('Memory usage approaching limit');
+    if (timeoutCount > 0) issues.push(`${timeoutCount} timeout(s) occurred`);
+
+    let status: 'excellent' | 'good' | 'warning' | 'critical';
+    if (healthScore >= 90) status = 'excellent';
+    else if (healthScore >= 70) status = 'good';
+    else if (healthScore >= 50) status = 'warning';
+    else status = 'critical';
+
+    return {
+      status,
+      score: Math.max(0, healthScore),
+      issues,
+      errorRate: Number(errorRate.toFixed(2)),
+      recentErrors: errorCount,
+      timeouts: timeoutCount,
+    };
+  }
+
+  /**
+   * Calculates temporal metrics.
+   */
+  private calculateTemporalMetrics(totalRequests: number) {
+    const uptimeMs =
+      Date.now() - (this.performanceMetrics.createdAt || Date.now());
+    const uptimeMinutes = uptimeMs / (1000 * 60);
+
+    const uptime = this.formatUptime(uptimeMs);
+    const requestsPerMinute =
+      uptimeMinutes > 0
+        ? Number((totalRequests / uptimeMinutes).toFixed(2))
+        : 0;
+
+    // Simple trend analysis based on recent response times
+    const { recentResponseTimes = [] } = this.performanceMetrics;
+    let trend: 'improving' | 'stable' | 'declining' = 'stable';
+
+    if (recentResponseTimes.length >= 10) {
+      const firstHalf = recentResponseTimes.slice(
+        0,
+        Math.floor(recentResponseTimes.length / 2),
+      );
+      const secondHalf = recentResponseTimes.slice(
+        Math.floor(recentResponseTimes.length / 2),
+      );
+
+      const firstHalfAvg =
+        firstHalf.reduce((sum, time) => sum + time, 0) / firstHalf.length;
+      const secondHalfAvg =
+        secondHalf.reduce((sum, time) => sum + time, 0) / secondHalf.length;
+
+      if (secondHalfAvg < firstHalfAvg * 0.9) trend = 'improving';
+      else if (secondHalfAvg > firstHalfAvg * 1.1) trend = 'declining';
     }
 
     return {
-      avgResponseTime,
-      minResponseTime,
-      maxResponseTime,
-      totalFetchCount: this.performanceMetrics.totalFetchCount,
-      currentConcurrentRequests:
-        this.performanceMetrics.currentConcurrentRequests,
-      maxConcurrentRequestsReached:
-        this.performanceMetrics.maxConcurrentRequestsReached,
-      rejectedRequestsCount: this.performanceMetrics.rejectedRequestsCount,
-      currentQueueLength: awaitedTasks.length,
-      concurrencyLimit: this.concurrency,
+      uptimeMs,
+      uptime,
+      requestsPerMinute,
+      trend,
     };
+  }
+
+  /**
+   * Formats uptime into human readable string.
+   */
+  private formatUptime(uptimeMs: number): string {
+    const seconds = Math.floor(uptimeMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
   }
 
   /**

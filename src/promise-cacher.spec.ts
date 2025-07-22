@@ -218,7 +218,7 @@ describe('PromiseCacher', () => {
       await cacher.get('test-key');
 
       const stats = cacher.statistics();
-      expect(stats.usedCountTotal).toBe(2);
+      expect(stats.efficiency.totalRequests).toBe(2);
     });
   });
 
@@ -290,8 +290,8 @@ describe('PromiseCacher', () => {
       cacher.delete('test-key');
       const statsAfter = cacher.statistics();
 
-      expect(statsAfter.releasedMemoryBytes).toBeGreaterThan(
-        statsBefore.releasedMemoryBytes,
+      expect(statsAfter.memory.memoryReclaimedBytes).toBeGreaterThan(
+        statsBefore.memory.memoryReclaimedBytes,
       );
     });
   });
@@ -338,12 +338,12 @@ describe('PromiseCacher', () => {
 
       await cacher.get('test-key');
       let stats = cacher.statistics();
-      expect(stats.usedCountTotal).toBeGreaterThan(0);
+      expect(stats.efficiency.totalRequests).toBeGreaterThan(0);
 
       cacher.clear();
       stats = cacher.statistics();
-      expect(stats.usedCountTotal).toBe(0);
-      expect(stats.releasedMemoryBytes).toBe(0);
+      expect(stats.efficiency.totalRequests).toBe(0);
+      expect(stats.memory.memoryReclaimedBytes).toBe(0);
     });
   });
 
@@ -404,24 +404,24 @@ describe('PromiseCacher', () => {
 
       const stats = cacher.statistics();
 
-      expect(stats.cacheCount).toBe(2);
-      expect(stats.usedCountTotal).toBe(3);
-      expect(stats.maxUsedCount).toBe(2); // key1 accessed twice
-      expect(stats.minUsedCount).toBe(1); // key2 accessed once
-      expect(stats.avgUsedCount).toBe(1.5); // (2+1)/2
-      expect(stats.usedMemoryBytes).toBeGreaterThan(0);
-      expect(typeof stats.usedMemory).toBe('string');
+      expect(stats.inventory.totalItems).toBe(2);
+      expect(stats.efficiency.totalRequests).toBe(3);
+      expect(stats.inventory.maxItemUsage).toBe(2); // key1 accessed twice
+      expect(stats.inventory.minItemUsage).toBe(1); // key2 accessed once
+      expect(stats.inventory.avgItemUsage).toBe(1.5); // (2+1)/2
+      expect(stats.memory.currentUsageBytes).toBeGreaterThan(0);
+      expect(typeof stats.memory.currentUsage).toBe('string');
     });
 
     it('should handle empty cache statistics', () => {
       const stats = cacher.statistics();
 
-      expect(stats.cacheCount).toBe(0);
-      expect(stats.usedCountTotal).toBe(0);
-      expect(stats.maxUsedCount).toBe(0);
-      expect(stats.minUsedCount).toBe(0);
-      expect(stats.avgUsedCount).toBe(0);
-      expect(stats.usedMemoryBytes).toBe(0);
+      expect(stats.inventory.totalItems).toBe(0);
+      expect(stats.efficiency.totalRequests).toBe(0);
+      expect(stats.inventory.maxItemUsage).toBe(0);
+      expect(stats.inventory.minItemUsage).toBe(0);
+      expect(stats.inventory.avgItemUsage).toBe(0);
+      expect(stats.memory.currentUsageBytes).toBe(0);
     });
   });
 
@@ -513,8 +513,8 @@ describe('PromiseCacher', () => {
 
       // Check if memory cleanup was triggered
       const stats = cacher.statistics();
-      expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
-      expect(stats.releasedMemoryBytes).toBeGreaterThan(0);
+      expect(stats.memory.cleanupCount).toBeGreaterThan(0);
+      expect(stats.memory.memoryReclaimedBytes).toBeGreaterThan(0);
     });
 
     it('should clean up expired tasks during flush', async () => {

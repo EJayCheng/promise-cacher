@@ -163,79 +163,132 @@ export type CacheKeyTransformFunction<INPUT = any> = (input: INPUT) => string;
 /**
  * Promise cacher runtime statistics
  * Provides comprehensive metrics about cache performance and usage
+ * Reorganized to focus on metrics that users truly care about
  */
 export interface PromiseCacherStatistics {
-  /** Total number of cached items currently in memory */
-  cacheCount: number;
+  // ========== 🎯 CORE CACHE EFFICIENCY ==========
+  /** Cache effectiveness metrics - the most important indicators */
+  efficiency: {
+    /** Cache hit rate as a percentage (0-100) - PRIMARY METRIC */
+    hitRate: number;
+    /** Number of cache hits (requests served from cache) */
+    hits: number;
+    /** Number of cache misses (requests that required fresh fetches) */
+    misses: number;
+    /** Total requests processed */
+    totalRequests: number;
+    /** Estimated time saved by caching (based on avg response times) */
+    timeSavedMs?: number;
+  };
 
-  /** Human-readable memory usage string (e.g., "1.5 MB") */
-  usedMemory: string;
+  // ========== ⚡ PERFORMANCE INSIGHTS ==========
+  /** Response time analytics for performance optimization */
+  performance: {
+    /** Average response time for cached requests (ms) */
+    avgCachedResponseTime: number;
+    /** Average response time for fresh fetches (ms) */
+    avgFetchResponseTime: number;
+    /** Performance improvement ratio (cached vs fresh) */
+    performanceGain: number;
+    /** 95th percentile response time (ms) */
+    p95ResponseTime: number;
+    /** Fastest response time recorded (ms) */
+    fastestResponse: number;
+    /** Slowest response time recorded (ms) */
+    slowestResponse: number;
+  };
 
-  /** Memory usage in bytes (raw number) */
-  usedMemoryBytes: number;
-
-  /** Total count of cache usage across all cached items */
-  usedCountTotal: number;
-
-  /** Maximum usage count among all cached items */
-  maxUsedCount: number;
-
-  /** Minimum usage count among all cached items */
-  minUsedCount: number;
-
-  /** Average usage count across all cached items */
-  avgUsedCount: number;
-
-  /** Number of times memory limit was exceeded */
-  overMemoryLimitCount: number;
-
-  /** Total bytes of memory released due to cleanup operations */
-  releasedMemoryBytes: number;
-
-  /** Cache hit rate as a percentage (0-100) */
-  hitRate: number;
-
-  /** Number of cache hits (requests served from cache) */
-  cacheHits: number;
-
-  /** Number of cache misses (requests that required fresh fetches) */
-  cacheMisses: number;
-
-  /**
-   * Performance metrics for monitoring cache efficiency
-   */
-  performance?: {
-    /** Average response time in milliseconds */
-    avgResponseTime: number;
-
-    /** Minimum response time in milliseconds */
-    minResponseTime: number;
-
-    /** Maximum response time in milliseconds */
-    maxResponseTime: number;
-
-    /** Total number of fetch operations performed */
-    totalFetchCount: number;
-
-    /** Current number of concurrent requests being processed */
-    currentConcurrentRequests: number;
-
-    /** Maximum concurrent requests reached during runtime */
-    maxConcurrentRequestsReached: number;
-
-    /** Number of requests rejected due to concurrency limit */
-    rejectedRequestsCount: number;
-
-    /** Current number of requests in queue waiting for execution */
-    currentQueueLength: number;
-    /** Concurrency limit for processing requests */
+  // ========== 🔄 CURRENT OPERATIONS ==========
+  /** Real-time operational status */
+  operations: {
+    /** Current number of requests being processed */
+    activeRequests: number;
+    /** Requests waiting in queue */
+    queuedRequests: number;
+    /** Maximum concurrent requests allowed (0 = unlimited) */
     concurrencyLimit: number;
+    /** Requests rejected due to concurrency limits */
+    rejectedRequests: number;
+    /** Peak concurrent requests reached */
+    peakConcurrency: number;
+  };
+
+  // ========== 💾 MEMORY MANAGEMENT ==========
+  /** Memory usage and optimization data */
+  memory: {
+    /** Current memory usage (human readable, e.g., "2.5 MB") */
+    currentUsage: string;
+    /** Current memory usage in bytes */
+    currentUsageBytes: number;
+    /** Memory usage percentage of configured limit */
+    usagePercentage: number;
+    /** Maximum memory limit (human readable) */
+    limit: string;
+    /** Maximum memory limit in bytes */
+    limitBytes: number;
+    /** Times memory cleanup was triggered */
+    cleanupCount: number;
+    /** Total memory reclaimed through cleanup (human readable) */
+    memoryReclaimed: string;
+    /** Total memory reclaimed in bytes */
+    memoryReclaimedBytes: number;
+  };
+
+  // ========== 📈 CACHE INVENTORY ==========
+  /** Cache content and usage patterns */
+  inventory: {
+    /** Total number of cached items */
+    totalItems: number;
+    /** Average times each cache item has been accessed */
+    avgItemUsage: number;
+    /** Most frequently accessed item usage count */
+    maxItemUsage: number;
+    /** Least accessed item usage count */
+    minItemUsage: number;
+    /** Items that have never been reused (usage = 1) */
+    singleUseItems: number;
+    /** High-value items (above average usage) */
+    highValueItems: number;
+  };
+
+  // ========== ⚠️ HEALTH & ISSUES ==========
+  /** System health and potential issues */
+  health: {
+    /** Overall system health status */
+    status: 'excellent' | 'good' | 'warning' | 'critical';
+    /** Health score (0-100) */
+    score: number;
+    /** List of current issues or warnings */
+    issues: string[];
+    /** Error rate percentage */
+    errorRate: number;
+    /** Recent errors count */
+    recentErrors: number;
+    /** Timeout occurrences */
+    timeouts: number;
+  };
+
+  // ========== 🕒 TEMPORAL DATA ==========
+  /** Time-based usage patterns */
+  temporal: {
+    /** Cache uptime in milliseconds */
+    uptimeMs: number;
+    /** Cache uptime in human readable format */
+    uptime: string;
+    /** Average requests per minute */
+    requestsPerMinute: number;
+    /** Cache effectiveness trend (improving/stable/declining) */
+    trend: 'improving' | 'stable' | 'declining';
   };
 }
 
 export interface PerformanceMetrics {
   /** Array storing response times in milliseconds for calculating performance statistics */
   responseTimes: number[];
+  /** Array storing response times specifically for cached requests */
+  cachedResponseTimes: number[];
+  /** Array storing response times specifically for fresh fetch requests */
+  fetchResponseTimes: number[];
   /** Total number of fetch operations executed (including both cache hits and misses) */
   totalFetchCount: number;
   /** Number of concurrent requests currently being processed */
@@ -250,4 +303,12 @@ export interface PerformanceMetrics {
   usedCount: number;
   /** Total bytes of memory released through cache cleanup operations */
   releasedMemoryBytes: number;
+  /** Number of timeouts that occurred during fetch operations */
+  timeoutCount: number;
+  /** Number of errors that occurred during fetch operations */
+  errorCount: number;
+  /** Timestamp when the cache was created */
+  createdAt: number;
+  /** Array to store recent response times for trend analysis */
+  recentResponseTimes: number[];
 }
