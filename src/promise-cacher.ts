@@ -275,108 +275,145 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
     this.performanceMetrics.usedCount++;
 
     const taskKey = this.transformCacheKey(key);
-    let isNewTask = false;
-    let isFromCache = false;
+    const { isNewTask, isFromCache } = this.determineCacheStrategy(
+      key,
+      taskKey,
+      forceUpdate,
+    );
 
-    // Determine if we need to create a new task or can use existing cache
-    if (forceUpdate || !this.taskMap.has(taskKey)) {
-      // No existing task or force update - create new task
-      this.set(key);
-      isNewTask = true;
-    } else {
-      // Check existing task status
-      const existingTask = this.taskMap.get(taskKey);
-      const status = existingTask.status;
-
-      if (status === CacheTaskStatusType.EXPIRED) {
-        // Task expired - create new task
-        this.set(key);
-        isNewTask = true;
-      } else if (status === CacheTaskStatusType.ACTIVE) {
-        // Task is active (resolved and cached) - this is a cache hit
-        isFromCache = true;
-      } else if (
-        status === CacheTaskStatusType.AWAIT ||
-        status === CacheTaskStatusType.QUEUED
-      ) {
-        // Task is still pending - wait for it to complete
-        // This is not exactly a cache hit, but also not a new fetch
-        isFromCache = false;
-        isNewTask = false;
-      }
-    }
-
-    // If this is a new task, increment fetch count
     if (isNewTask) {
       this.performanceMetrics.totalFetchCount++;
     }
 
-    // Get the result
-    let result;
     try {
-      result = await this.taskMap.get(taskKey).output();
+      const result = await this.taskMap.get(taskKey).output();
+      this.recordSuccessMetrics(startTime, isFromCache);
+      return result;
     } catch (error) {
-      // Record error metrics
-      this.performanceMetrics.errorCount++;
-
-      // Record response time (error case)
-      const responseTime = Date.now() - startTime;
-      this.performanceMetrics.responseTimes.push(responseTime);
-
-      // Limit arrays to prevent memory growth
-      if (this.performanceMetrics.responseTimes.length > 1000) {
-        this.performanceMetrics.responseTimes.shift();
-      }
-
-      // Record in recent response times for trend analysis
-      this.performanceMetrics.recentResponseTimes.push(responseTime);
-      if (this.performanceMetrics.recentResponseTimes.length > 100) {
-        this.performanceMetrics.recentResponseTimes.shift();
-      }
-
-      // Record specific type of response time (error case)
-      if (!isFromCache) {
-        this.performanceMetrics.fetchResponseTimes.push(responseTime);
-        if (this.performanceMetrics.fetchResponseTimes.length > 1000) {
-          this.performanceMetrics.fetchResponseTimes.shift();
-        }
-      }
-
-      // Re-throw the error to maintain the original API behavior
+      this.recordErrorMetrics(startTime, isFromCache);
       throw error;
     }
+  }
 
-    // Record response time
-    const responseTime = Date.now() - startTime;
-    this.performanceMetrics.responseTimes.push(responseTime);
-
-    // Limit arrays to prevent memory growth (keep last 1000 entries)
-    if (this.performanceMetrics.responseTimes.length > 1000) {
-      this.performanceMetrics.responseTimes.shift();
+  /**
+   * Determines cache strategy and updates cache state if needed.
+   *
+   * @param key - Original input key
+   * @param taskKey - Transformed cache key
+   * @param forceUpdate - Whether to force update
+   * @returns Cache strategy information
+   */
+  private determineCacheStrategy(
+    key: INPUT,
+    taskKey: string,
+    forceUpdate: boolean,
+  ): {
+    isNewTask: boolean;
+    isFromCache: boolean;
+  } {
+    // Force update or no existing task - create new task
+    if (forceUpdate || !this.taskMap.has(taskKey)) {
+      this.set(key);
+      return { isNewTask: true, isFromCache: false };
     }
 
-    // Maintain recent response times for trend analysis (keep last 100)
-    this.performanceMetrics.recentResponseTimes.push(responseTime);
-    if (this.performanceMetrics.recentResponseTimes.length > 100) {
-      this.performanceMetrics.recentResponseTimes.shift();
-    }
+    const existingTask = this.taskMap.get(taskKey);
+    const status = existingTask.status;
 
-    // Record specific type of response time
-    if (isFromCache) {
-      this.performanceMetrics.cachedResponseTimes.push(responseTime);
-      // Limit cached response times array
-      if (this.performanceMetrics.cachedResponseTimes.length > 1000) {
-        this.performanceMetrics.cachedResponseTimes.shift();
-      }
+    if (status === CacheTaskStatusType.EXPIRED) {
+      // Task expired - create new task
+      this.set(key);
+      return { isNewTask: true, isFromCache: false };
+    } else if (status === CacheTaskStatusType.ACTIVE) {
+      // Cache hit - use existing resolved value
+      return { isNewTask: false, isFromCache: true };
     } else {
-      this.performanceMetrics.fetchResponseTimes.push(responseTime);
-      // Limit fetch response times array
-      if (this.performanceMetrics.fetchResponseTimes.length > 1000) {
-        this.performanceMetrics.fetchResponseTimes.shift();
-      }
+      // Task is pending (AWAIT or QUEUED) - wait for completion
+      return { isNewTask: false, isFromCache: false };
     }
+  }
 
-    return result;
+  /**
+   * Records performance metrics for successful operations.
+   *
+   * @param startTime - Operation start timestamp
+   * @param isFromCache - Whether result came from cache
+   */
+  private recordSuccessMetrics(startTime: number, isFromCache: boolean): void {
+    const responseTime = Date.now() - startTime;
+
+    this.addToMetricsArray(
+      this.performanceMetrics.responseTimes,
+      responseTime,
+      1000,
+    );
+    this.addToMetricsArray(
+      this.performanceMetrics.recentResponseTimes,
+      responseTime,
+      100,
+    );
+
+    if (isFromCache) {
+      this.addToMetricsArray(
+        this.performanceMetrics.cachedResponseTimes,
+        responseTime,
+        1000,
+      );
+    } else {
+      this.addToMetricsArray(
+        this.performanceMetrics.fetchResponseTimes,
+        responseTime,
+        1000,
+      );
+    }
+  }
+
+  /**
+   * Records performance metrics for error cases.
+   *
+   * @param startTime - Operation start timestamp
+   * @param isFromCache - Whether result was attempted from cache
+   */
+  private recordErrorMetrics(startTime: number, isFromCache: boolean): void {
+    this.performanceMetrics.errorCount++;
+    const responseTime = Date.now() - startTime;
+
+    this.addToMetricsArray(
+      this.performanceMetrics.responseTimes,
+      responseTime,
+      1000,
+    );
+    this.addToMetricsArray(
+      this.performanceMetrics.recentResponseTimes,
+      responseTime,
+      100,
+    );
+
+    if (!isFromCache) {
+      this.addToMetricsArray(
+        this.performanceMetrics.fetchResponseTimes,
+        responseTime,
+        1000,
+      );
+    }
+  }
+
+  /**
+   * Adds a value to a metrics array with automatic size limit management.
+   *
+   * @param array - Target metrics array
+   * @param value - Value to add
+   * @param maxSize - Maximum array size before trimming
+   */
+  private addToMetricsArray(
+    array: number[],
+    value: number,
+    maxSize: number,
+  ): void {
+    array.push(value);
+    if (array.length > maxSize) {
+      array.shift();
+    }
   }
 
   /**
