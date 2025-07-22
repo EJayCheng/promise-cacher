@@ -98,8 +98,46 @@ async function demonstrateNewStatistics() {
   console.log('\n📈 Statistics after cache hits:');
   displayStatistics(cacher.statistics());
 
+  // Phase 4: Concurrent Operations Demo
+  console.log('\nPhase 4: Concurrent operations demo (showing CURRENT OPERATIONS)');
+  console.log('Creating concurrent requests to demonstrate operational metrics...');
+  
+  // Create multiple concurrent requests to show operational status
+  const concurrentPromises = [];
+  const concurrentUserIds = Array.from({length: 8}, (_, i) => `concurrent-user${i + 1}`);
+  
+  console.log('🔄 Launching 8 concurrent requests...');
+  for (const userId of concurrentUserIds) {
+    const promise = cacher.get(userId).then(result => {
+      console.log(`✅ Concurrent request completed for ${userId}`);
+      return result;
+    }).catch(error => {
+      console.log(`❌ Concurrent request failed for ${userId}: ${error.message}`);
+      throw error;
+    });
+    concurrentPromises.push(promise);
+  }
+
+  // Check operations status while requests are in progress
+  console.log('\n📊 Operations status during concurrent execution:');
+  const midOperationStats = cacher.statistics();
+  console.log(`   🔄 Active Requests: ${midOperationStats.operations.activeRequests}`);
+  console.log(`   ⏳ Queued Requests: ${midOperationStats.operations.queuedRequests}`);
+  console.log(`   🎯 Concurrency Limit: ${midOperationStats.operations.concurrencyLimit}`);
+  console.log(`   📈 Peak Concurrency: ${midOperationStats.operations.peakConcurrency}`);
+
+  // Wait for all concurrent requests to complete
+  try {
+    await Promise.allSettled(concurrentPromises);
+  } catch (error) {
+    console.log('Some concurrent requests failed, but continuing...');
+  }
+
+  console.log('\n📈 Statistics after concurrent operations:');
+  displayStatistics(cacher.statistics());
+
   // Add more users to test memory management
-  console.log('\nPhase 3: Adding more users (memory pressure)');
+  console.log('\nPhase 5: Adding more users (memory pressure)');
   for (let i = 6; i <= 20; i++) {
     try {
       await cacher.get(`user${i}`);
