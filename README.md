@@ -1,47 +1,66 @@
 # Promise Cacher
 
-A sophisticated TypeScript promise caching library that provides automatic memory management, configurable expiration policies, and comprehensive performance monitoring.
+A sophisticated promise caching system that provides automatic memory management, configurable expiration policies, and performance monitoring for TypeScript/JavaScript applications.
 
-## 🚀 Features
+[![npm version](https://badge.fury.io/js/promise-cacher.svg)](https://www.npmjs.com/package/promise-cacher)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **Smart Memory Management**: Automatic cleanup when memory limits are exceeded
-- **Flexible Expiration Policies**: Time-based (TTL) or idle-based cache expiration
-- **Performance Monitoring**: Comprehensive statistics and metrics tracking
-- **Concurrent Request Management**: Deduplication and concurrent request limiting
-- **TypeScript Support**: Full type safety with generic type parameters
-- **Error Handling**: Configurable error caching policies
-- **WeakMap Optimization**: Efficient memory usage for object keys
-- **Timeout Control**: Prevent long-running operations from blocking cache
+## 🚀 Project Overview
 
-## 📦 Installation
+Promise Cacher is a high-performance library that manages cached promises with features including:
 
-```bash
-npm install promise-cacher
-```
+- **Automatic memory cleanup** when limits are exceeded
+- **Configurable cache expiration** (time-based or idle-based)
+- **Performance statistics and monitoring**
+- **Timeout handling** for long-running operations
+- **Error handling policies** (cache or release errors)
+- **Concurrent request limiting**
+- **Memory usage tracking** and optimization
+- **TypeScript support** with full type safety
+
+### Key Problems Solved
+
+1. **Memory Management**: Prevents memory leaks by automatically cleaning up expired or low-priority cache entries
+2. **Performance Optimization**: Reduces redundant API calls and expensive computations
+3. **Concurrent Request Control**: Manages parallel requests to prevent overwhelming backend services
+4. **Error Handling**: Provides flexible strategies for handling and caching errors
+5. **Monitoring**: Offers comprehensive statistics for performance analysis
 
 ## 🏗️ Technical Architecture
 
-### Core Technologies
+### Technology Stack
 
-- **Language**: TypeScript 5.x
-- **Runtime**: Node.js (ES5 target for broad compatibility)
+- **Language**: TypeScript 5.0+
+- **Runtime**: Node.js (ES2016+)
+- **Target**: ES5 with CommonJS modules
 - **Dependencies**:
-  - `lodash` (^4.17.21) - Utility functions
-  - `md5` (^2.3.0) - Hash generation for cache keys
+  - `lodash ^4.17.21` - Object manipulation and cloning
+  - `md5 ^2.3.0` - Cache key hashing
+- **Development Tools**:
+  - TypeScript for compilation
+  - Jest for testing
+  - ESLint + Prettier for code quality
+  - Rimraf for build cleanup
 
-### Development Tools
+### Core Architecture
 
-- **Testing**: Jest with TypeScript support
-- **Code Quality**: ESLint with TypeScript and Prettier integration
-- **Build**: TypeScript compiler with CommonJS modules
-- **Package Management**: npm
+```
+PromiseCacher
+├── CacheTask (manages individual cache entries)
+├── PromiseHolder (handles promise lifecycle)
+├── RequestQueue (manages concurrent requests)
+└── Utilities
+    ├── Cache scoring and memory management
+    ├── Size calculation and formatting
+    └── Timeout and delay handling
+```
 
-## 📁 Project Structure
+## 📁 File System Structure
 
 ```
 src/
-├── index.ts                    # Main entry point
-├── promise-cacher.ts          # Core PromiseCacher class
+├── index.ts                    # Main exports
+├── promise-cacher.ts           # Core caching implementation
 ├── cache-task.ts              # Individual cache task management
 ├── define.ts                  # Type definitions and interfaces
 ├── constants.ts               # Default configuration values
@@ -49,171 +68,26 @@ src/
 │   ├── best-practices-example.ts
 │   ├── performance-analysis.ts
 │   └── queue-demo.ts
-└── util/                      # Utility modules
+└── util/                      # Utility functions
     ├── cache-key-transform-default-fn.ts
     ├── calc-cache-score.ts
     ├── delay.ts
+    ├── json-to-string-for-console.ts
+    ├── promise-holder.ts
     ├── request-queue.ts
     ├── size-format.ts
     ├── sizeof.ts
     └── timeout.ts
 ```
 
-## 🛠️ Code Quality Tools
+## 🔧 Development Setup
 
-### ESLint Configuration
+### Prerequisites
 
-- **Parser**: TypeScript ESLint with type checking
-- **Rules**: Recommended TypeScript rules with custom overrides
-- **Integration**: Prettier for code formatting
-- **Globals**: Node.js and Jest environments
+- Node.js 16+
+- npm or yarn package manager
 
-### Prettier Settings
-
-- Integrated with ESLint for consistent code formatting
-- Configured via ESLint plugin for seamless development experience
-
-### Jest Testing
-
-- **Preset**: `ts-jest` for TypeScript support
-- **Environment**: Node.js
-- **Coverage**: Available via `npm run test:coverage`
-- **Pattern**: Tests use `.spec.ts` or `.test.ts` extensions
-
-## 🔧 Usage
-
-### Basic Example
-
-```typescript
-import { PromiseCacher } from 'promise-cacher';
-
-// Create a cacher for API calls
-const apiCacher = new PromiseCacher<UserData, string>(
-  async (userId: string) => {
-    // Your fetch logic here
-    const response = await fetch(`/api/users/${userId}`);
-    return response.json();
-  },
-  {
-    cacheMillisecond: 5 * 60 * 1000, // 5 minutes cache
-  },
-);
-
-// Use the cache
-const user = await apiCacher.get('user123');
-const sameUser = await apiCacher.get('user123'); // Returns cached result
-```
-
-### Advanced Configuration
-
-```typescript
-import {
-  PromiseCacher,
-  ReleaseCachePolicyType,
-  ErrorTaskPolicyType,
-} from 'promise-cacher';
-
-const advancedCacher = new PromiseCacher<string, string>(
-  async (key: string) => {
-    // Simulate API call
-    const response = await fetch(`/api/data/${key}`);
-    return response.text();
-  },
-  {
-    // Cache expiration strategy
-    releaseCachePolicy: ReleaseCachePolicyType.IDLE, // or EXPIRE
-    cacheMillisecond: 10 * 60 * 1000, // 10 minutes
-
-    // Error handling
-    errorTaskPolicy: ErrorTaskPolicyType.RELEASE, // or CACHE
-
-    // Memory management
-    releaseMemoryPolicy: {
-      maxMemoryByte: 50 * 1024 * 1024, // 50MB max
-      minMemoryByte: 25 * 1024 * 1024, // Clean down to 25MB
-    },
-
-    // Performance settings
-    timeoutMillisecond: 30000, // 30 second timeout
-    maxConcurrentRequests: 10, // Limit concurrent requests
-    useClones: false, // Use shared instances for better performance
-
-    // Cache cleanup interval
-    flushInterval: 60 * 1000, // Check every minute
-  },
-);
-```
-
-### API Methods
-
-```typescript
-// Get cached value or fetch if not exists
-const result = await cacher.get(key);
-const freshResult = await cacher.get(key, true); // Force refresh
-
-// Set a value directly
-cacher.set(key, value);
-
-// Check if key exists in cache
-const exists = cacher.has(key);
-
-// Remove specific key
-cacher.delete(key);
-
-// Clear all cache
-cacher.clear();
-
-// Get comprehensive statistics
-const stats = cacher.statistics();
-```
-
-## 📊 Configuration Options
-
-### CacherConfig Interface
-
-| Option                  | Type                     | Default   | Description                                    |
-| ----------------------- | ------------------------ | --------- | ---------------------------------------------- |
-| `releaseCachePolicy`    | `ReleaseCachePolicyType` | `EXPIRE`  | Cache expiration strategy (`EXPIRE` or `IDLE`) |
-| `cacheMillisecond`      | `number`                 | `300000`  | Cache duration in milliseconds (5 minutes)     |
-| `errorTaskPolicy`       | `ErrorTaskPolicyType`    | `RELEASE` | Error handling (`RELEASE` or `CACHE`)          |
-| `releaseMemoryPolicy`   | `object`                 | -         | Memory management configuration                |
-| `flushInterval`         | `number`                 | `60000`   | Cache cleanup interval (1 minute)              |
-| `cacheKeyTransform`     | `function`               | -         | Custom key transformation function             |
-| `timeoutMillisecond`    | `number`                 | -         | Operation timeout limit                        |
-| `useClones`             | `boolean`                | `false`   | Whether to clone cached objects                |
-| `maxConcurrentRequests` | `number`                 | -         | Maximum concurrent requests                    |
-
-### Memory Policy Options
-
-| Option           | Type       | Default    | Description                     |
-| ---------------- | ---------- | ---------- | ------------------------------- |
-| `maxMemoryByte`  | `number`   | `10485760` | Maximum memory threshold (10MB) |
-| `minMemoryByte`  | `number`   | `5242880`  | Cleanup target threshold (5MB)  |
-| `calcCacheValue` | `function` | -          | Custom cache value calculation  |
-
-## 🧪 Testing
-
-Run the test suite:
-
-```bash
-# Run all tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run specific test file
-npm test -- cache-task.spec.ts
-```
-
-### Test Structure
-
-- Unit tests for all core components
-- Integration tests for complex scenarios
-- Performance benchmarks in examples
-- Comprehensive coverage of edge cases
-
-## 🚀 Build and Development
+### Installation
 
 ```bash
 # Install dependencies
@@ -223,84 +97,224 @@ npm install
 npm run build
 
 # Run tests
-npm test
+npm run test
 
-# Generate coverage report
+# Run tests with coverage
 npm run test:coverage
 ```
 
-### Build Output
+### Code Quality Tools
 
-- **Target**: ES5 for broad compatibility
-- **Module**: CommonJS
-- **Output**: `dist/` directory with compiled JavaScript and type definitions
-- **Source Maps**: Generated for debugging support
+The project uses the following tools for maintaining code quality:
 
-## 📈 Performance Statistics
+- **ESLint**: TypeScript-ESLint with recommended rules
+- **Prettier**: Code formatting (integrated with ESLint)
+- **Jest**: Unit testing with TypeScript support
+- **TypeScript**: Strict type checking with ES5 target
 
-The `statistics()` method provides comprehensive metrics:
+Configuration files:
+
+- `eslint.config.mjs` - ESLint configuration
+- `tsconfig.json` - TypeScript compiler options
+- `jest` configuration in `package.json`
+
+## 📚 Usage
+
+### Basic Usage
 
 ```typescript
-interface PromiseCacherStatistics {
-  cacheCount: number; // Current cached items
-  usedMemory: string; // Human-readable memory usage
-  usedMemoryBytes: number; // Raw memory usage in bytes
-  usedCountTotal: number; // Total cache access count
-  maxUsedCount: number; // Highest access count
-  minUsedCount: number; // Lowest access count
-  avgUsedCount: number; // Average access count
-  overMemoryLimitCount: number; // Memory limit exceeded count
-  releasedMemoryBytes: number; // Total memory released
-  performance: {
-    avgResponseTime: number; // Average response time
-    minResponseTime: number; // Fastest response time
-    maxResponseTime: number; // Slowest response time
-    totalFetchCount: number; // Total fetch operations
-    currentConcurrentRequests: number; // Active requests
-    maxConcurrentRequestsReached: number; // Peak concurrency
-    rejectedRequestsCount: number; // Rejected requests
-  };
-}
+import { PromiseCacher } from 'promise-cacher';
+
+// Create a cacher instance
+const cacher = new PromiseCacher<UserData, string>(async (userId: string) => {
+  // Your fetch function
+  const response = await fetch(`/api/users/${userId}`);
+  return response.json();
+});
+
+// Use the cacher
+const user = await cacher.get('user123'); // First call - fetches from API
+const userCached = await cacher.get('user123'); // Second call - returns cached result
 ```
 
-## 🔍 Memory Management
+### Advanced Configuration
 
-The library includes intelligent memory management:
+```typescript
+import {
+  PromiseCacher,
+  ExpirationStrategyType,
+  ErrorTaskPolicyType,
+} from 'promise-cacher';
 
-1. **Automatic Monitoring**: Continuously tracks memory usage
-2. **Smart Cleanup**: Uses scoring algorithm considering:
-   - Access frequency
-   - Memory footprint
-   - Time since last access
-   - Cache age
-3. **Configurable Thresholds**: Set custom memory limits
-4. **WeakMap Optimization**: Efficient garbage collection for object keys
+const cacher = new PromiseCacher<ApiResponse, string>(fetchFunction, {
+  // Cache Policy
+  cachePolicy: {
+    ttlMs: 5 * 60 * 1000, // 5 minutes
+    expirationStrategy: ExpirationStrategyType.IDLE, // or EXPIRE
+    errorTaskPolicy: ErrorTaskPolicyType.CACHE, // or IGNORE
+    flushIntervalMs: 60 * 1000, // 1 minute cleanup interval
+  },
 
-## ⚡ Performance Characteristics
+  // Fetching Policy
+  fetchingPolicy: {
+    useClones: true, // Return cloned objects for safety
+    timeoutMs: 30 * 1000, // 30 second timeout
+    concurrency: 10, // Max 10 concurrent requests
+  },
 
-- **Request Deduplication**: Multiple concurrent requests for the same key execute only once
-- **Near-Zero Cache Hits**: Cached responses return in ~0ms
-- **High Throughput**: Handles 1000+ requests in under 200ms
-- **Memory Efficient**: Automatic cleanup prevents memory leaks
-- **Concurrent Control**: Prevents resource exhaustion through request limiting
+  // Memory Management
+  freeUpMemoryPolicy: {
+    maxMemoryBytes: 50 * 1024 * 1024, // 50MB limit
+    minMemoryBytes: 25 * 1024 * 1024, // Clean to 25MB
+  },
+});
+```
 
-## 📄 License
+### Configuration Parameters
 
-MIT License - see [LICENSE](LICENSE) file for details.
+#### Cache Policy
 
-## 👥 Contributing
+- **`ttlMs`**: Cache duration in milliseconds (default: 300,000ms / 5 minutes)
+- **`expirationStrategy`**: `EXPIRE` (absolute TTL) or `IDLE` (idle timeout)
+- **`errorTaskPolicy`**: `CACHE` (store errors) or `IGNORE` (don't cache errors)
+- **`flushIntervalMs`**: Cleanup interval (default: 60,000ms / 1 minute)
+
+#### Fetching Policy
+
+- **`useClones`**: Return deep clones for data safety (default: false)
+- **`timeoutMs`**: Request timeout limit (default: undefined)
+- **`concurrency`**: Max concurrent requests (default: unlimited)
+
+#### Memory Policy
+
+- **`maxMemoryBytes`**: Trigger cleanup threshold (default: 10MB)
+- **`minMemoryBytes`**: Target after cleanup (default: 5MB)
+
+### Performance Monitoring
+
+```typescript
+// Get comprehensive statistics
+const stats = cacher.statistics();
+console.log(stats);
+/*
+{
+  hitRate: 0.85,
+  totalMemoryBytes: 2048576,
+  taskCount: 150,
+  averageResponseTime: 245,
+  // ... more metrics
+}
+*/
+
+// Monitor memory usage
+console.log(cacher.memoryUsage());
+/*
+{
+  totalBytes: 2048576,
+  formattedSize: "2.0 MB",
+  taskCount: 150
+}
+*/
+```
+
+## 🧪 Testing
+
+The project uses Jest for comprehensive testing:
+
+```bash
+# Run all tests
+npm run test
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Watch mode for development
+npm run test -- --watch
+```
+
+Testing includes:
+
+- Unit tests for all core functionality
+- Memory management tests
+- Concurrency and timeout tests
+- Performance benchmark tests
+- Error handling validation
+
+## 🚀 Deployment
+
+### Build Process
+
+```bash
+# Clean and build
+npm run build
+```
+
+This process:
+
+1. Cleans the `dist/` directory
+2. Compiles TypeScript to JavaScript (ES5/CommonJS)
+3. Generates type declaration files
+4. Creates source maps for debugging
+
+### Publishing
+
+The package is configured for npm registry:
+
+```bash
+npm publish
+```
+
+Build artifacts:
+
+- `dist/index.js` - Main entry point
+- `dist/index.d.ts` - Type definitions
+- `dist/**/*.map` - Source maps
+
+### Integration
+
+Install in your project:
+
+```bash
+npm install promise-cacher
+```
+
+Import and use:
+
+```typescript
+import { PromiseCacher } from 'promise-cacher';
+// or
+const { PromiseCacher } = require('promise-cacher');
+```
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes with tests
-4. Ensure all tests pass: `npm test`
-5. Submit a pull request
+3. Make your changes
+4. Run tests: `npm run test`
+5. Ensure code quality: ESLint will check on commit
+6. Submit a pull request
 
-## 🔗 Repository
+## 📄 License
 
-[https://github.com/EJayCheng/promise-cacher](https://github.com/EJayCheng/promise-cacher)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📊 Performance Characteristics
+
+- **Memory Efficiency**: Automatic cleanup prevents memory leaks
+- **CPU Optimization**: Efficient scoring algorithms for cache eviction
+- **Network Reduction**: Significantly reduces redundant API calls
+- **Concurrency Control**: Prevents overwhelming backend services
+- **Type Safety**: Full TypeScript support with generics
+
+## 🔍 Examples
+
+Check the `src/examples/` directory for comprehensive usage examples:
+
+- `best-practices-example.ts` - Production-ready configurations
+- `performance-analysis.ts` - Performance monitoring and optimization
+- `queue-demo.ts` - Concurrent request management
 
 ---
 
-**Author**: EJay Cheng  
-**Version**: 2.0.0
+For more detailed documentation and advanced usage patterns, please refer to the TypeScript definitions and example files in the repository.
