@@ -9,6 +9,9 @@ import {
 import {
   CacherConfig,
   CacheTaskStatusType,
+  CalcCacheScoreFn,
+  ErrorTaskPolicyType,
+  ExpirationStrategyType,
   FetchByKeyMethod,
   PerformanceMetrics,
   PromiseCacherStatistics,
@@ -184,6 +187,27 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
 
   public get concurrency(): number {
     return this.config?.fetchingPolicy?.concurrency ?? DefaultConcurrency;
+  }
+
+  public get errorTaskPolicy(): ErrorTaskPolicyType {
+    return (
+      this.config?.cachePolicy?.errorTaskPolicy ?? ErrorTaskPolicyType.IGNORE
+    );
+  }
+
+  public get expirationStrategy(): ExpirationStrategyType {
+    return (
+      this.config?.cachePolicy?.expirationStrategy ??
+      ExpirationStrategyType.EXPIRE
+    );
+  }
+
+  public get useClones(): boolean {
+    return this.config?.fetchingPolicy?.useClones === true;
+  }
+
+  public get calcCacheScoreFn(): CalcCacheScoreFn {
+    return this.config?.freeUpMemoryPolicy?.calcCacheScoreFn;
   }
 
   /**

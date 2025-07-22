@@ -1,6 +1,5 @@
 import { cloneDeep } from 'lodash';
 import {
-  CacherConfig,
   CacheTaskStatusType,
   CalcCacheScoreFn,
   ErrorTaskPolicyType,
@@ -90,17 +89,8 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
     const timeoutError = new Error(`Error CacheTask timeout: key#`);
     const task = this.cacher.fetchFn(this.input);
     this.promiseHolder.resolve(
-      limitTimeout(task, this.cacher.timeoutMillisecond, timeoutError),
+      limitTimeout(task, this.cacher.timeoutMs, timeoutError),
     );
-  }
-
-  /**
-   * Gets the configuration object from the parent cacher.
-   *
-   * @returns The cacher configuration
-   */
-  private get config(): CacherConfig {
-    return this.cacher.config;
   }
 
   /**
@@ -128,7 +118,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
       })
       .catch((error) => {
         this.taskError = error;
-        if (this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
+        if (this.cacher.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
           // Delay release to avoid immediate cleanup during error handling
           setTimeout(() => {
             this.release();
@@ -143,13 +133,13 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
 
   public get isExpired(): boolean {
     const now = Date.now();
-    if (this.config.expirePolicy === ExpirationStrategyType.IDLE) {
-      if (now - this.lastAccessedAt > this.cacher.cacheMillisecond) {
+    if (this.cacher.expirationStrategy === ExpirationStrategyType.IDLE) {
+      if (now - this.lastAccessedAt > this.cacher.ttlMs) {
         return true;
       }
     }
-    if (this.config.expirePolicy === ExpirationStrategyType.EXPIRE) {
-      if (now - this.resolvedAt > this.cacher.cacheMillisecond) {
+    if (this.cacher.expirationStrategy === ExpirationStrategyType.EXPIRE) {
+      if (now - this.resolvedAt > this.cacher.ttlMs) {
         return true;
       }
     }
@@ -165,7 +155,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   public get status(): CacheTaskStatusType {
     if (
       this.taskError &&
-      this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE
+      this.cacher.errorTaskPolicy !== ErrorTaskPolicyType.CACHE
     ) {
       return CacheTaskStatusType.FAILED;
     }
@@ -178,7 +168,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
     if (this.resolvedAt) {
       return CacheTaskStatusType.ACTIVE;
     }
-    return CacheTaskStatusType.AWAITED;
+    return CacheTaskStatusType.AWAIT;
   }
 
   /**
@@ -195,7 +185,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
       throw this.taskError;
     }
     let task: Promise<OUTPUT> = this.promiseHolder.promise;
-    if (this.config.useClones) {
+    if (this.cacher.useClones) {
       task = task.then((output) => cloneDeep(output));
     }
     return task;
@@ -209,8 +199,7 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    */
   public score(): number {
     const fn: CalcCacheScoreFn =
-      this.config?.freeUpMemoryPolicy?.calcCacheScoreFn ||
-      calcCacheScoreDefaultFn;
+      this.cacher?.calcCacheScoreFn || calcCacheScoreDefaultFn;
     return fn(this.cacher, this as any);
   }
 }

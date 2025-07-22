@@ -40,7 +40,7 @@ export enum ExpirationStrategyType {
  */
 export enum ErrorTaskPolicyType {
   /** Release the cache when task encounters an error */
-  RELEASE = 'RELEASE',
+  IGNORE = 'IGNORE',
   /** Cache the error result when task encounters an error */
   CACHE = 'CACHE',
 }
