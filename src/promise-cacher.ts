@@ -422,12 +422,20 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
    */
   public statistics(): PromiseCacherStatistics {
     const usedCounts = this.tasks.map((t) => t.usedCount);
+    const totalRequests = this.performanceMetrics.usedCount;
+    const totalFetchCount = this.performanceMetrics.totalFetchCount;
+    const cacheHits = totalRequests - totalFetchCount;
+    const cacheMisses = totalFetchCount;
+    const hitRate = totalRequests > 0 ? (cacheHits / totalRequests) * 100 : 0;
 
     return {
       cacheCount: this.cacheCount,
       usedMemory: sizeFormat(this.usedMemoryBytes),
       usedMemoryBytes: this.usedMemoryBytes,
-      usedCountTotal: this.performanceMetrics.usedCount,
+      usedCountTotal: totalRequests,
+      hitRate: Number(hitRate.toFixed(2)),
+      cacheHits,
+      cacheMisses,
       ...this.calculateUsageStatistics(usedCounts),
       overMemoryLimitCount: this.performanceMetrics.overMemoryLimitCount,
       releasedMemoryBytes: this.performanceMetrics.releasedMemoryBytes,

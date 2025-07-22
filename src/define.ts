@@ -192,6 +192,15 @@ export interface PromiseCacherStatistics {
   /** Total bytes of memory released due to cleanup operations */
   releasedMemoryBytes: number;
 
+  /** Cache hit rate as a percentage (0-100) */
+  hitRate: number;
+
+  /** Number of cache hits (requests served from cache) */
+  cacheHits: number;
+
+  /** Number of cache misses (requests that required fresh fetches) */
+  cacheMisses: number;
+
   /**
    * Performance metrics for monitoring cache efficiency
    */

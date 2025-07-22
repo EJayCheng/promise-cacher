@@ -57,13 +57,11 @@ async function basicCachingDemo() {
 
   console.log('\n📊 Cache statistics:');
   const stats = userCacher.statistics();
-  const totalRequests = stats.usedCountTotal;
-  const cacheHits = totalRequests - stats.performance?.totalFetchCount || 0;
-  const hitRate = totalRequests > 0 ? cacheHits / totalRequests : 0;
 
-  console.log(`   Hit rate: ${(hitRate * 100).toFixed(1)}%`);
-  console.log(`   Total requests: ${totalRequests}`);
-  console.log(`   Cache hits: ${cacheHits}`);
+  console.log(`   Hit rate: ${stats.hitRate}%`);
+  console.log(`   Total requests: ${stats.usedCountTotal}`);
+  console.log(`   Cache hits: ${stats.cacheHits}`);
+  console.log(`   Cache misses: ${stats.cacheMisses}`);
   console.log(`   Fresh fetches: ${stats.performance?.totalFetchCount || 0}`);
 
   // Clean up this demo's cacher instance
@@ -332,15 +330,11 @@ async function performanceMonitoringDemo() {
 
   console.log('\n📈 Performance Statistics:');
   const stats = monitoredCacher.statistics();
-  const totalRequests = stats.usedCountTotal;
-  const freshFetches = stats.performance?.totalFetchCount || 0;
-  const cacheHits = totalRequests - freshFetches;
-  const hitRate = totalRequests > 0 ? cacheHits / totalRequests : 0;
 
-  console.log(`   Total requests: ${totalRequests}`);
-  console.log(`   Cache hits: ${cacheHits}`);
-  console.log(`   Cache misses: ${freshFetches}`);
-  console.log(`   Hit rate: ${(hitRate * 100).toFixed(1)}%`);
+  console.log(`   Total requests: ${stats.usedCountTotal}`);
+  console.log(`   Cache hits: ${stats.cacheHits}`);
+  console.log(`   Cache misses: ${stats.cacheMisses}`);
+  console.log(`   Hit rate: ${stats.hitRate}%`);
   console.log(
     `   Average response time: ${stats.performance?.avgResponseTime?.toFixed(1)}ms`,
   );
@@ -348,7 +342,7 @@ async function performanceMonitoringDemo() {
   console.log(`   Memory usage: ${stats.usedMemory}`);
 
   console.log('\n🏆 Performance Benefits Summary:');
-  console.log(`   • Reduced API calls by ${Math.round(hitRate * 100)}%`);
+  console.log(`   • Reduced API calls by ${stats.hitRate}%`);
   console.log(`   • Improved average response time through caching`);
   console.log(
     `   • Automatic memory management with ${stats.cacheCount} active tasks`,
