@@ -15,10 +15,14 @@ describe('CacheTask', () => {
     jest.clearAllMocks();
     mockFetchFn = jest.fn();
     cacher = new PromiseCacher(mockFetchFn, {
-      cacheMillisecond: 1000,
-      expirePolicy: ExpirationStrategyType.EXPIRE,
-      errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
-      useClones: false,
+      cachePolicy: {
+        ttlMs: 1000,
+        expirationStrategy: ExpirationStrategyType.EXPIRE,
+        errorTaskPolicy: ErrorTaskPolicyType.IGNORE,
+      },
+      fetchingPolicy: {
+        useClones: false,
+      },
     });
   });
 
@@ -50,7 +54,7 @@ describe('CacheTask', () => {
       const promise = new Promise(() => {}); // Never resolves
       const task = new CacheTask(cacher, 'test-key', promise);
 
-      expect(task.status).toBe(CacheTaskStatusType.AWAITED);
+      expect(task.status).toBe(CacheTaskStatusType.AWAIT);
     });
 
     it('should return "active" when task is resolved and not expired', async () => {
@@ -61,46 +65,56 @@ describe('CacheTask', () => {
       expect(task.status).toBe(CacheTaskStatusType.ACTIVE);
     });
 
-    it('should return "deprecated" when task is expired (EXPIRE policy)', async () => {
+    it('should return "expired" when task is expired (EXPIRE policy)', async () => {
       const shortCacher = new PromiseCacher(mockFetchFn, {
-        cacheMillisecond: 10,
-        expirePolicy: ExpirationStrategyType.EXPIRE,
+        cachePolicy: {
+          ttlMs: 10,
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+        },
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(shortCacher, 'test-key', promise);
 
       await delay(15); // Wait for expiration
-      expect(task.status).toBe(CacheTaskStatusType.DEPRECATED);
+      expect(task.status).toBe(CacheTaskStatusType.EXPIRED);
     });
 
-    it('should return "deprecated" when task is idle too long (IDLE policy)', async () => {
+    it('should return "expired" when task is idle too long (IDLE policy)', async () => {
       const idleCacher = new PromiseCacher(mockFetchFn, {
-        cacheMillisecond: 10,
-        expirePolicy: ExpirationStrategyType.IDLE,
+        cachePolicy: {
+          ttlMs: 10,
+          expirationStrategy: ExpirationStrategyType.IDLE,
+        },
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(idleCacher, 'test-key', promise);
 
       await delay(5); // Allow task to resolve
       await delay(15); // Wait for idle expiration
-      expect(task.status).toBe(CacheTaskStatusType.DEPRECATED);
+      expect(task.status).toBe(CacheTaskStatusType.EXPIRED);
     });
 
-    it('should return "deprecated" when task has error and errorTaskPolicy is RELEASE', async () => {
+    it('should return "failed" when task has error and errorTaskPolicy is IGNORE', async () => {
       const errorCacher = new PromiseCacher(mockFetchFn, {
-        errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.IGNORE,
+        },
       });
       const promise = Promise.reject(new Error('Test error'));
       const task = new CacheTask(errorCacher, 'test-key', promise);
 
       await delay(10); // Allow error to be caught
-      expect(task.status).toBe(CacheTaskStatusType.DEPRECATED);
+      expect(task.status).toBe(CacheTaskStatusType.FAILED);
     });
 
     it('should return "active" when task has error but errorTaskPolicy is CACHE', async () => {
       const errorCacher = new PromiseCacher(mockFetchFn, {
-        errorTaskPolicy: ErrorTaskPolicyType.CACHE,
-        cacheMillisecond: 1000,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+          ttlMs: 1000,
+        },
       });
       const promise = Promise.reject(new Error('Test error'));
       const task = new CacheTask(errorCacher, 'test-key', promise);
@@ -155,7 +169,9 @@ describe('CacheTask', () => {
 
     it('should return cloned output when useClones is true', async () => {
       const cloneCacher = new PromiseCacher(mockFetchFn, {
-        useClones: true,
+        fetchingPolicy: {
+          useClones: true,
+        },
       });
       const originalObject = { value: 'test', nested: { prop: 'data' } };
       const promise = Promise.resolve(originalObject);
@@ -174,24 +190,14 @@ describe('CacheTask', () => {
 
     it('should apply timeout if configured', async () => {
       const timeoutCacher = new PromiseCacher(mockFetchFn, {
-        timeoutMillisecond: 10,
+        fetchingPolicy: {
+          timeoutMs: 10,
+        },
       });
       const promise = new Promise(() => {}); // Never resolves
       const task = new CacheTask(timeoutCacher, 'test-key', promise);
 
       await expect(task.output()).rejects.toThrow(/timeout/);
-    });
-  });
-
-  describe('releaseSelf', () => {
-    it('should remove itself from the cacher', () => {
-      const deleteSpy = jest.spyOn(cacher, 'delete');
-      const promise = Promise.resolve('test-output');
-      const task = new CacheTask(cacher, 'test-key', promise);
-
-      task.release();
-
-      expect(deleteSpy).toHaveBeenCalledWith('test-key');
     });
   });
 
@@ -253,9 +259,12 @@ describe('CacheTask', () => {
       expect(task.resolvedAt).toBeGreaterThan(0);
     });
 
-    it('should call releaseSelf when error occurs and errorTaskPolicy is RELEASE', async () => {
+    it('should call releaseSelf when error occurs and errorTaskPolicy is IGNORE', async () => {
       const releaseCacher = new PromiseCacher(mockFetchFn, {
-        errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.IGNORE,
+        },
       });
       const deleteSpy = jest.spyOn(releaseCacher, 'delete');
       const promise = Promise.reject(new Error('Test error'));
@@ -268,7 +277,10 @@ describe('CacheTask', () => {
 
     it('should not call releaseSelf when error occurs and errorTaskPolicy is CACHE', async () => {
       const cacheCacher = new PromiseCacher(mockFetchFn, {
-        errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          errorTaskPolicy: ErrorTaskPolicyType.CACHE,
+        },
       });
       const deleteSpy = jest.spyOn(cacheCacher, 'delete');
       const promise = Promise.reject(new Error('Test error'));

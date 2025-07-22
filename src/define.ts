@@ -77,7 +77,7 @@ export interface CacherConfig {
      * - EXPIRE: time to live
      * - IDLE: idle timeout
      */
-    expirationStrategy: ExpirationStrategyType;
+    expirationStrategy?: ExpirationStrategyType;
     /**
      * Cache expiration time in milliseconds
      * @default 300000 (5 minutes)

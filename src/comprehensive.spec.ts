@@ -68,10 +68,12 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should handle zero memory limits gracefully', async () => {
       const config: CacherConfig = {
         freeUpMemoryPolicy: {
-          maxMemoryByte: 0,
-          minMemoryByte: 0,
+          maxMemoryBytes: 0,
+          minMemoryBytes: 0,
         },
-        flushInterval: 50,
+        cachePolicy: {
+          flushIntervalMs: 50, // Short flush interval for testing
+        },
       };
 
       console.log('Test config:', JSON.stringify(config, null, 2));
@@ -613,7 +615,9 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Key Transformation Edge Cases', () => {
     it('should handle custom key transformation that returns same key for different inputs', async () => {
       const config: CacherConfig = {
-        cacheKeyTransform: () => 'same-key', // Always returns same key
+        cachePolicy: {
+          cacheKeyTransform: () => 'same-key', // Always returns same key
+        },
       };
 
       mockFetchFn.mockImplementation(

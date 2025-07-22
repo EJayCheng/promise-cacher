@@ -4,11 +4,9 @@ import { calcCacheScoreDefaultFn } from './calc-cache-score';
 
 describe('calcCacheScoreDefaultFn', () => {
   // Mock objects for testing
-  const createMockCacher = (
-    cacheMillisecond: number = 60000,
-  ): PromiseCacher<any, any> => {
+  const createMockCacher = (ttlMs: number = 60000): PromiseCacher<any, any> => {
     return {
-      cacheMillisecond,
+      ttlMs,
     } as PromiseCacher<any, any>;
   };
 

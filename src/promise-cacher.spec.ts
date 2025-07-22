@@ -1,4 +1,4 @@
-import { CacherConfig } from './define';
+import { CacherConfig, ExpirationStrategyType } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { delay } from './util/delay';
 
@@ -30,8 +30,11 @@ describe('PromiseCacher', () => {
 
     it('should create instance with custom config', () => {
       const config: CacherConfig = {
-        cacheMillisecond: 60000,
-        flushInterval: 30000,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          ttlMs: 60000,
+          flushIntervalMs: 30000,
+        },
       };
       const cacher = new PromiseCacher(mockFetchFn, config);
       expect(cacher.config).toBe(config);
@@ -351,48 +354,63 @@ describe('PromiseCacher', () => {
   });
 
   describe('Configuration properties', () => {
-    it('should return correct cacheMillisecond from config', () => {
-      const config: CacherConfig = { cacheMillisecond: 60000 };
-      const cacher = new PromiseCacher(mockFetchFn, config);
-
-      expect(cacher.cacheMillisecond).toBe(60000);
-      cacher.clear();
-    });
-
-    it('should return default cacheMillisecond when not configured', () => {
-      const cacher = new PromiseCacher(mockFetchFn);
-
-      expect(cacher.cacheMillisecond).toBeDefined();
-      expect(typeof cacher.cacheMillisecond).toBe('number');
-      cacher.clear();
-    });
-
-    it('should return correct timeoutMillisecond from config', () => {
+    it('should return correct ttlMs from config', () => {
       const config: CacherConfig = {
-        timeoutMillisecond: 5000,
-        cacheMillisecond: 10000,
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          ttlMs: 60000,
+        },
       };
       const cacher = new PromiseCacher(mockFetchFn, config);
 
-      expect(cacher.timeoutMillisecond).toBe(5000);
+      expect(cacher.ttlMs).toBe(60000);
       cacher.clear();
     });
 
-    it('should limit timeoutMillisecond to cacheMillisecond', () => {
+    it('should return default ttlMs when not configured', () => {
+      const cacher = new PromiseCacher(mockFetchFn);
+
+      expect(cacher.ttlMs).toBeDefined();
+      expect(typeof cacher.ttlMs).toBe('number');
+      cacher.clear();
+    });
+
+    it('should return correct timeoutMs from config', () => {
       const config: CacherConfig = {
-        timeoutMillisecond: 15000,
-        cacheMillisecond: 10000,
+        fetchingPolicy: {
+          timeoutMs: 5000,
+        },
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          ttlMs: 10000,
+        },
       };
       const cacher = new PromiseCacher(mockFetchFn, config);
 
-      expect(cacher.timeoutMillisecond).toBe(10000);
+      expect(cacher.timeoutMs).toBe(5000);
       cacher.clear();
     });
 
-    it('should return undefined timeoutMillisecond when not configured', () => {
+    it('should limit timeoutMs to ttlMs', () => {
+      const config: CacherConfig = {
+        fetchingPolicy: {
+          timeoutMs: 15000,
+        },
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          ttlMs: 10000,
+        },
+      };
+      const cacher = new PromiseCacher(mockFetchFn, config);
+
+      expect(cacher.timeoutMs).toBe(10000);
+      cacher.clear();
+    });
+
+    it('should return undefined timeoutMs when not configured', () => {
       const cacher = new PromiseCacher(mockFetchFn);
 
-      expect(cacher.timeoutMillisecond).toBeUndefined();
+      expect(cacher.timeoutMs).toBeUndefined();
       cacher.clear();
     });
   });
@@ -436,10 +454,13 @@ describe('PromiseCacher', () => {
     beforeEach(() => {
       const config: CacherConfig = {
         freeUpMemoryPolicy: {
-          maxMemoryByte: 1024, // 1KB limit for testing
-          minMemoryByte: 512, // 512B minimum
+          maxMemoryBytes: 1024, // 1KB limit for testing
+          minMemoryBytes: 512, // 512B minimum
         },
-        flushInterval: 100, // Fast flush for testing
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          flushIntervalMs: 100, // Fast flush for testing
+        },
       };
 
       memoryCacher = new PromiseCacher(async (key: string) => {
@@ -479,7 +500,11 @@ describe('PromiseCacher', () => {
 
     beforeEach(() => {
       const config: CacherConfig = {
-        cacheKeyTransform: (input: any) => JSON.stringify(input).toLowerCase(),
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          cacheKeyTransform: (input: any) =>
+            JSON.stringify(input).toLowerCase(),
+        },
       };
 
       transformCacher = new PromiseCacher(mockFetchFn, config);
@@ -505,7 +530,12 @@ describe('PromiseCacher', () => {
     let timerCacher: PromiseCacher;
 
     beforeEach(() => {
-      timerCacher = new PromiseCacher(mockFetchFn, { flushInterval: 1000 });
+      timerCacher = new PromiseCacher(mockFetchFn, {
+        cachePolicy: {
+          expirationStrategy: ExpirationStrategyType.EXPIRE,
+          flushIntervalMs: 1000,
+        },
+      });
     });
 
     afterEach(() => {

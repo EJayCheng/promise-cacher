@@ -25,9 +25,7 @@ export function calcCacheScoreDefaultFn<OUTPUT = any, INPUT = string>(
   const usedBytes = Math.max(task.usedBytes, 1);
   const now = Date.now();
   let timeScore =
-    (now * 2 - task.createdAt - task.lastAccessedAt) /
-    2 /
-    cacher.cacheMillisecond;
+    (now * 2 - task.createdAt - task.lastAccessedAt) / 2 / cacher.ttlMs;
   if (timeScore === 0) timeScore = 1;
 
   return (task.usedCount * 1024) / usedBytes / timeScore;

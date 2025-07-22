@@ -106,8 +106,12 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   }
 
   /**
-   * Handles the async operation execution and manages its lifecycle.
-   * Sets up promise handlers for both success and error cases.
+   * Sets up promise handlers for the async operation lifecycle.
+   * Manages success/error handling, memory tracking, and cleanup.
+   *
+   * When an operation completes successfully, calculates the memory usage.
+   * For errors, applies the configured error policy (cache or release).
+   * Always updates timing metrics and triggers cleanup when done.
    *
    * @private
    */
