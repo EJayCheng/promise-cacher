@@ -186,7 +186,10 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   }
 
   public get concurrency(): number {
-    return this.config?.fetchingPolicy?.concurrency ?? DefaultConcurrency;
+    const configConcurrency =
+      this.config?.fetchingPolicy?.concurrency ?? DefaultConcurrency;
+    // Treat negative concurrency as 0 (unlimited)
+    return configConcurrency < 0 ? 0 : configConcurrency;
   }
 
   public get errorTaskPolicy(): ErrorTaskPolicyType {

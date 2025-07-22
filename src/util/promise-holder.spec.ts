@@ -18,6 +18,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('resolve', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should resolve with a value', async () => {
       const testValue = 'test-value';
       holder.resolve(testValue);
@@ -55,6 +58,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('reject', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should reject with an error', async () => {
       const testError = new Error('test-error');
       holder.reject(testError);
@@ -96,6 +102,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('isLiberated property', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should be false initially', () => {
       expect(holder.isLiberated).toBe(false);
     });
@@ -112,6 +121,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('liberatedAt property', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should be undefined initially', () => {
       expect(holder.liberatedAt).toBeUndefined();
     });
@@ -136,6 +148,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('promise access', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should provide same promise instance through different methods', () => {
       const promise1 = holder.promise;
       const promise2 = holder.getPromise();
@@ -153,6 +168,10 @@ describe('PromiseHolder', () => {
   });
 
   describe('concurrent operations', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
+
     it('should handle multiple await calls on same promise', async () => {
       const promises = [holder.promise, holder.promise, holder.promise];
 
@@ -180,6 +199,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('error handling edge cases', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should handle resolve with null value', async () => {
       holder.resolve(null as any);
       const result = await holder.promise;
@@ -201,6 +223,9 @@ describe('PromiseHolder', () => {
   });
 
   describe('integration with async operations', () => {
+    beforeEach(() => {
+      holder = new PromiseHolder<string>();
+    });
     it('should work with async/await patterns', async () => {
       const asyncOperation = async () => {
         await delay(50);

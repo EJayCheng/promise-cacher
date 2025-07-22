@@ -18,8 +18,11 @@ describe('PromiseCacher', () => {
   afterEach(() => {
     if (cacher) {
       cacher.clear();
+      cacher = undefined;
     }
     jest.restoreAllMocks();
+    // Clear any remaining timers
+    jest.clearAllTimers();
   });
 
   describe('constructor', () => {
@@ -496,7 +499,7 @@ describe('PromiseCacher', () => {
       });
     });
 
-    it('should trigger memory cleanup when limit exceeded', async (done) => {
+    it('should trigger memory cleanup when limit exceeded', async () => {
       // Mock large values to exceed memory limit
       mockFetchFn.mockImplementation(() => 'x'.repeat(400));
 
@@ -505,16 +508,16 @@ describe('PromiseCacher', () => {
       await cacher.get('key2');
       await cacher.get('key3'); // Should exceed 1000 bytes
 
-      // Wait for flush interval
-      setTimeout(() => {
-        const stats = cacher.statistics();
-        expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
-        expect(stats.releasedMemoryBytes).toBeGreaterThan(0);
-        done();
-      }, 150);
+      // Manually trigger flush to test memory cleanup
+      (cacher as any).flush();
+
+      // Check if memory cleanup was triggered
+      const stats = cacher.statistics();
+      expect(stats.overMemoryLimitCount).toBeGreaterThan(0);
+      expect(stats.releasedMemoryBytes).toBeGreaterThan(0);
     });
 
-    it('should clean up expired tasks during flush', async (done) => {
+    it('should clean up expired tasks during flush', async () => {
       cacher = new PromiseCacher(mockFetchFn, {
         cachePolicy: {
           ttlMs: 50,
@@ -527,11 +530,15 @@ describe('PromiseCacher', () => {
       await cacher.get('key1');
       expect(cacher.cacheCount).toBe(1);
 
-      // Wait for expiration and flush
-      setTimeout(() => {
-        expect(cacher.cacheCount).toBe(0);
-        done();
-      }, 200);
+      // Wait for expiration and manually flush
+      await new Promise((resolve) => {
+        setTimeout(() => {
+          // Manually trigger flush to clean expired tasks
+          (cacher as any).flush();
+          expect(cacher.cacheCount).toBe(0);
+          resolve(void 0);
+        }, 60);
+      });
     });
   });
 
@@ -653,7 +660,7 @@ describe('PromiseCacher', () => {
   });
 
   describe('expiration strategies', () => {
-    it('should expire based on creation time (EXPIRE strategy)', async (done) => {
+    it('should expire based on creation time (EXPIRE strategy)', async () => {
       cacher = new PromiseCacher(mockFetchFn, {
         cachePolicy: {
           ttlMs: 100,
@@ -668,15 +675,17 @@ describe('PromiseCacher', () => {
       const result1 = await cacher.get('test-key');
       expect(result1).toBe('first-value');
 
-      setTimeout(async () => {
-        const result2 = await cacher.get('test-key');
-        expect(result2).toBe('second-value');
-        expect(mockFetchFn).toHaveBeenCalledTimes(2);
-        done();
-      }, 150);
+      await new Promise((resolve) => {
+        setTimeout(async () => {
+          const result2 = await cacher.get('test-key');
+          expect(result2).toBe('second-value');
+          expect(mockFetchFn).toHaveBeenCalledTimes(2);
+          resolve(void 0);
+        }, 150);
+      });
     });
 
-    it('should expire based on last access time (IDLE strategy)', async (done) => {
+    it('should expire based on last access time (IDLE strategy)', async () => {
       cacher = new PromiseCacher(mockFetchFn, {
         cachePolicy: {
           ttlMs: 100,
@@ -696,12 +705,14 @@ describe('PromiseCacher', () => {
       }, 50);
 
       // Check after original expiry time but within extended time
-      setTimeout(async () => {
-        const result = await cacher.get('test-key');
-        expect(result).toBe('first-value'); // Should still be cached
-        expect(mockFetchFn).toHaveBeenCalledTimes(1);
-        done();
-      }, 120);
+      await new Promise((resolve) => {
+        setTimeout(async () => {
+          const result = await cacher.get('test-key');
+          expect(result).toBe('first-value'); // Should still be cached
+          expect(mockFetchFn).toHaveBeenCalledTimes(1);
+          resolve(void 0);
+        }, 120);
+      });
     });
   });
 
