@@ -219,9 +219,8 @@ export interface PromiseCacherStatistics {
 
     /** Current number of requests in queue waiting for execution */
     currentQueueLength: number;
-
-    /** Maximum queue length reached during runtime */
-    maxQueueLengthReached: number;
+    /** Concurrency limit for processing requests */
+    concurrencyLimit: number;
   };
 }
 

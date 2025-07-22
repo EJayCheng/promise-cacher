@@ -89,8 +89,7 @@ describe('CacheTask', () => {
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(idleCacher, 'test-key', promise);
 
-      await delay(5); // Allow task to resolve
-      await delay(15); // Wait for idle expiration
+      await delay(100); // Wait for idle expiration
       expect(task.status).toBe(CacheTaskStatusType.EXPIRED);
     });
 

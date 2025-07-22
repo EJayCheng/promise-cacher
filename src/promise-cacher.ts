@@ -431,7 +431,7 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       ...this.calculateUsageStatistics(usedCounts),
       overMemoryLimitCount: this.performanceMetrics.overMemoryLimitCount,
       releasedMemoryBytes: this.performanceMetrics.releasedMemoryBytes,
-      // performance: this.calculatePerformanceStatistics(),
+      performance: this.calculatePerformanceStatistics(),
     };
   }
 
@@ -457,7 +457,9 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
   private calculatePerformanceStatistics() {
     const responseTimes = this.performanceMetrics.responseTimes;
     const hasResponseTimes = responseTimes.length > 0;
-
+    const awaitedTasks = this.tasks.filter(
+      (t) => t.status === CacheTaskStatusType.AWAIT,
+    );
     let avgResponseTime = 0;
     let minResponseTime = 0;
     let maxResponseTime = 0;
@@ -479,8 +481,8 @@ export class PromiseCacher<OUTPUT = any, INPUT = any> {
       maxConcurrentRequestsReached:
         this.performanceMetrics.maxConcurrentRequestsReached,
       rejectedRequestsCount: this.performanceMetrics.rejectedRequestsCount,
-      // currentQueueLength: queueMetrics.currentQueueLength,
-      // maxQueueLengthReached: queueMetrics.maxQueueLengthReached,
+      currentQueueLength: awaitedTasks.length,
+      concurrencyLimit: this.concurrency,
     };
   }
 

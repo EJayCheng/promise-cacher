@@ -573,7 +573,6 @@ describe('PromiseCacher', () => {
       let i = 0;
       cacher = new PromiseCacher(
         async (key: string) => {
-          console.log('WTF:', key, i);
           if (i == 0) {
             i = 1;
             throw new Error('First error');
