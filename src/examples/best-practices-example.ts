@@ -1,4 +1,4 @@
-import { PromiseCacher, ReleaseCachePolicyType } from '../';
+import { ExpirePolicyType, PromiseCacher } from '../';
 
 // 使用範例和最佳實踐
 console.log('=== Promise Cacher 使用範例和最佳實踐 ===\n');
@@ -41,11 +41,11 @@ const advancedCacher = new PromiseCacher<string, string>(
   },
   {
     // 使用閒置過期策略
-    releaseCachePolicy: ReleaseCachePolicyType.IDLE,
+    expirePolicy: ExpirePolicyType.IDLE,
     cacheMillisecond: 10 * 1000, // 10 秒閒置過期
 
     // 記憶體管理
-    releaseMemoryPolicy: {
+    freeUpMemoryPolicy: {
       maxMemoryByte: 1024 * 1024, // 1MB 限制
       minMemoryByte: 512 * 1024, // 清理到 512KB
     },
@@ -219,7 +219,7 @@ class CachedUserRepository implements UserRepository {
     },
     {
       cacheMillisecond: 5 * 60 * 1000, // 5 分鐘
-      releaseMemoryPolicy: {
+      freeUpMemoryPolicy: {
         maxMemoryByte: 10 * 1024 * 1024, // 10MB
         minMemoryByte: 5 * 1024 * 1024, // 5MB
       },

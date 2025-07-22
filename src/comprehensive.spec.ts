@@ -1,8 +1,4 @@
-import {
-  CacherConfig,
-  ErrorTaskPolicyType,
-  ReleaseCachePolicyType,
-} from './define';
+import { CacherConfig, ErrorTaskPolicyType, ExpirePolicyType } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { delay } from './util/delay';
 
@@ -67,7 +63,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
   describe('Memory Management Edge Cases', () => {
     it('should handle zero memory limits gracefully', async () => {
       const config: CacherConfig = {
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 0,
           minMemoryByte: 0,
         },
@@ -103,7 +99,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
 
     it('should handle minMemoryByte greater than maxMemoryByte', async () => {
       const config: CacherConfig = {
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 100,
           minMemoryByte: 200, // Invalid: min > max
         },
@@ -121,7 +117,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
 
     it('should handle aggressive memory cleanup', async () => {
       const config: CacherConfig = {
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 1, // Very small limit
           minMemoryByte: 0,
         },
@@ -461,7 +457,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should expire cache based on time (EXPIRE policy)', async () => {
       const config: CacherConfig = {
         cacheMillisecond: 50,
-        releaseCachePolicy: ReleaseCachePolicyType.EXPIRE,
+        expirePolicy: ExpirePolicyType.EXPIRE,
         flushInterval: 25,
       };
 
@@ -485,7 +481,7 @@ describe('Comprehensive PromiseCacher Tests', () => {
     it('should expire cache based on idle time (IDLE policy)', async () => {
       const config: CacherConfig = {
         cacheMillisecond: 50,
-        releaseCachePolicy: ReleaseCachePolicyType.IDLE,
+        expirePolicy: ExpirePolicyType.IDLE,
         flushInterval: 25,
       };
 

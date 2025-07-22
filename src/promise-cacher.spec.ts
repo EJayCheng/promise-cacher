@@ -435,7 +435,7 @@ describe('PromiseCacher', () => {
 
     beforeEach(() => {
       const config: CacherConfig = {
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 1024, // 1KB limit for testing
           minMemoryByte: 512, // 512B minimum
         },

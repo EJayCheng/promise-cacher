@@ -1,4 +1,4 @@
-import { PromiseCacher, ReleaseCachePolicyType } from '../';
+import { ExpirePolicyType, PromiseCacher } from '../';
 
 interface PerformanceTestResult {
   testName: string;
@@ -139,7 +139,7 @@ class PerformanceAnalyzer {
         return 'x'.repeat(2000); // 2KB 每個條目
       },
       {
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 20 * 1024, // 20KB 限制
           minMemoryByte: 10 * 1024, // 清理到 10KB
         },
@@ -197,7 +197,7 @@ class PerformanceAnalyzer {
       },
       {
         maxConcurrentRequests: 20,
-        releaseMemoryPolicy: {
+        freeUpMemoryPolicy: {
           maxMemoryByte: 5 * 1024 * 1024, // 5MB
         },
       },
@@ -297,7 +297,7 @@ class PerformanceAnalyzer {
         return `TTL-${key}`;
       },
       {
-        releaseCachePolicy: ReleaseCachePolicyType.EXPIRE,
+        expirePolicy: ExpirePolicyType.EXPIRE,
         cacheMillisecond: 2000,
       },
     );
@@ -310,7 +310,7 @@ class PerformanceAnalyzer {
         return `IDLE-${key}`;
       },
       {
-        releaseCachePolicy: ReleaseCachePolicyType.IDLE,
+        expirePolicy: ExpirePolicyType.IDLE,
         cacheMillisecond: 2000,
       },
     );

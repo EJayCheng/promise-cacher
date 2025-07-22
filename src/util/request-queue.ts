@@ -10,6 +10,8 @@ export interface QueuedRequest<INPUT, OUTPUT> {
 export interface RequestQueueMetrics {
   currentQueueLength: number;
   maxQueueLengthReached: number;
+  currentConcurrentRequests: number;
+  maxConcurrentRequestsReached: number;
 }
 
 /**
@@ -28,10 +30,15 @@ export class RequestQueue<INPUT, OUTPUT> {
   /** Internal queue storage for pending requests */
   private queue: QueuedRequest<INPUT, OUTPUT>[] = [];
 
+  /** Set to track currently running concurrent requests */
+  private concurrentRequests = new Set<string>();
+
   /** Performance metrics tracking */
   private metrics: RequestQueueMetrics = {
     currentQueueLength: 0,
     maxQueueLengthReached: 0,
+    currentConcurrentRequests: 0,
+    maxConcurrentRequestsReached: 0,
   };
 
   /**
@@ -94,6 +101,7 @@ export class RequestQueue<INPUT, OUTPUT> {
    */
   public clear(): void {
     this.queue = [];
+    this.concurrentRequests.clear();
     this.resetMetrics();
   }
 
@@ -123,6 +131,78 @@ export class RequestQueue<INPUT, OUTPUT> {
     this.metrics = {
       currentQueueLength: 0,
       maxQueueLengthReached: 0,
+      currentConcurrentRequests: 0,
+      maxConcurrentRequestsReached: 0,
     };
+  }
+
+  /**
+   * Starts tracking a concurrent request.
+   *
+   * @param taskKey - The cache key of the request to track
+   */
+  public startConcurrentRequest(taskKey: string): void {
+    this.concurrentRequests.add(taskKey);
+    this.updateConcurrentMetrics();
+  }
+
+  /**
+   * Stops tracking a concurrent request.
+   *
+   * @param taskKey - The cache key of the request to stop tracking
+   */
+  public endConcurrentRequest(taskKey: string): void {
+    this.concurrentRequests.delete(taskKey);
+    this.updateConcurrentMetrics();
+  }
+
+  /**
+   * Checks if a request is currently being processed.
+   *
+   * @param taskKey - The cache key to check
+   * @returns True if the request is currently being processed
+   */
+  public isConcurrentRequestActive(taskKey: string): boolean {
+    return this.concurrentRequests.has(taskKey);
+  }
+
+  /**
+   * Gets the current number of concurrent requests.
+   */
+  public get currentConcurrentRequests(): number {
+    return this.concurrentRequests.size;
+  }
+
+  /**
+   * Checks if the concurrent limit is reached.
+   *
+   * @param maxConcurrent - Maximum number of concurrent requests allowed
+   * @returns True if the limit is reached
+   */
+  public isConcurrentLimitReached(maxConcurrent?: number): boolean {
+    return (
+      maxConcurrent !== undefined &&
+      maxConcurrent > 0 &&
+      this.concurrentRequests.size >= maxConcurrent
+    );
+  }
+
+  /**
+   * Clears all concurrent request tracking.
+   */
+  public clearConcurrentRequests(): void {
+    this.concurrentRequests.clear();
+    this.updateConcurrentMetrics();
+  }
+
+  /**
+   * Updates concurrent request metrics.
+   */
+  private updateConcurrentMetrics(): void {
+    this.metrics.currentConcurrentRequests = this.concurrentRequests.size;
+    this.metrics.maxConcurrentRequestsReached = Math.max(
+      this.metrics.maxConcurrentRequestsReached,
+      this.concurrentRequests.size,
+    );
   }
 }

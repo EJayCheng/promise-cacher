@@ -2,7 +2,7 @@ import { CacheTask } from './cache-task';
 import {
   CacheTaskStatusType,
   ErrorTaskPolicyType,
-  ReleaseCachePolicyType,
+  ExpirePolicyType,
 } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { delay } from './util/delay';
@@ -16,7 +16,7 @@ describe('CacheTask', () => {
     mockFetchFn = jest.fn();
     cacher = new PromiseCacher(mockFetchFn, {
       cacheMillisecond: 1000,
-      releaseCachePolicy: ReleaseCachePolicyType.EXPIRE,
+      expirePolicy: ExpirePolicyType.EXPIRE,
       errorTaskPolicy: ErrorTaskPolicyType.RELEASE,
       useClones: false,
     });
@@ -50,7 +50,7 @@ describe('CacheTask', () => {
       const promise = new Promise(() => {}); // Never resolves
       const task = new CacheTask(cacher, 'test-key', promise);
 
-      expect(task.status).toBe(CacheTaskStatusType.AWAIT);
+      expect(task.status).toBe(CacheTaskStatusType.AWAITED);
     });
 
     it('should return "active" when task is resolved and not expired', async () => {
@@ -64,7 +64,7 @@ describe('CacheTask', () => {
     it('should return "deprecated" when task is expired (EXPIRE policy)', async () => {
       const shortCacher = new PromiseCacher(mockFetchFn, {
         cacheMillisecond: 10,
-        releaseCachePolicy: ReleaseCachePolicyType.EXPIRE,
+        expirePolicy: ExpirePolicyType.EXPIRE,
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(shortCacher, 'test-key', promise);
@@ -76,7 +76,7 @@ describe('CacheTask', () => {
     it('should return "deprecated" when task is idle too long (IDLE policy)', async () => {
       const idleCacher = new PromiseCacher(mockFetchFn, {
         cacheMillisecond: 10,
-        releaseCachePolicy: ReleaseCachePolicyType.IDLE,
+        expirePolicy: ExpirePolicyType.IDLE,
       });
       const promise = Promise.resolve('test-output');
       const task = new CacheTask(idleCacher, 'test-key', promise);
@@ -207,8 +207,8 @@ describe('CacheTask', () => {
     it('should use custom calc function when provided', () => {
       const customCalc = jest.fn().mockReturnValue(999);
       const customCacher = new PromiseCacher(mockFetchFn, {
-        releaseMemoryPolicy: {
-          calcCacheValue: customCalc,
+        freeUpMemoryPolicy: {
+          calcCacheScoreFn: customCalc,
         },
       });
       const promise = Promise.resolve('test-output');

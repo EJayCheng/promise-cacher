@@ -2,12 +2,13 @@ import { cloneDeep } from 'lodash';
 import {
   CacherConfig,
   CacheTaskStatusType,
-  CalcCacheValueMethod,
+  CalcCacheScoreFn,
   ErrorTaskPolicyType,
-  ReleaseCachePolicyType,
+  ExpirePolicyType,
 } from './define';
 import { PromiseCacher } from './promise-cacher';
 import { calcCacheScoreDefaultFn } from './util/calc-cache-score';
+import { PromiseHolder } from './util/promise-holder';
 import { sizeof } from './util/sizeof';
 import { limitTimeout } from './util/timeout';
 
@@ -19,6 +20,8 @@ import { limitTimeout } from './util/timeout';
  * @template INPUT - The type of the input key used to identify the cache entry
  */
 export class CacheTask<OUTPUT = any, INPUT = string> {
+  private promiseHolder = new PromiseHolder<OUTPUT>();
+
   /** The number of bytes used by the cached output value */
   public usedBytes: number = 0;
 
@@ -29,39 +32,37 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   public createdAt: number = Date.now();
 
   /** Timestamp when this cache task was last accessed */
-  public lastAccessedAt: number = Date.now();
+  public lastAccessedAt: number;
 
   /** Timestamp when the async operation was resolved (success or error) */
   public resolvedAt: number;
 
+  public get order(): number {
+    return this.createdAt - this.usedCount * 1000;
+  }
+
   /** Timestamp when the fetch operation started */
-  public fetchStartedAt: number = Date.now();
+  public get fetchStartedAt(): number {
+    return this.promiseHolder.liberatedAt;
+  }
+
+  public get queuedTime(): number {
+    if (!this.createdAt || !this.fetchStartedAt) {
+      return undefined;
+    }
+    return this.fetchStartedAt - this.createdAt;
+  }
 
   /** Response time in milliseconds (from fetch start to resolution) */
-  public responseTime: number;
+  public get responseTime(): number {
+    if (!this.resolvedAt || !this.fetchStartedAt) {
+      return undefined;
+    }
+    return this.resolvedAt - this.fetchStartedAt;
+  }
 
   /** Error that occurred during the async operation execution */
   private taskError: Error;
-
-  /**
-   * Safely converts input to string, handling circular references.
-   *
-   * @private
-   * @param input - The input to stringify
-   * @returns A safe string representation of the input
-   */
-  private safeStringify(input: any): string {
-    try {
-      const result = JSON.stringify(input);
-      return result ?? String(input);
-    } catch (error) {
-      // Handle circular references
-      if (error instanceof TypeError && error.message.includes('circular')) {
-        return '[Circular Reference]';
-      }
-      return String(input);
-    }
-  }
 
   /**
    * Creates a new cache task instance.
@@ -73,12 +74,24 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
   public constructor(
     private cacher: PromiseCacher<OUTPUT, INPUT>,
     public input: INPUT,
-    private asyncOutput: Promise<OUTPUT>,
+    _asyncOutput?: Promise<OUTPUT> | OUTPUT | Error,
   ) {
-    if (!(asyncOutput instanceof Promise)) {
-      this.asyncOutput = Promise.resolve(this.asyncOutput);
+    this.setPromiseHandle();
+    if (_asyncOutput instanceof Error) {
+      this.promiseHolder.reject(_asyncOutput);
+    } else if (_asyncOutput != undefined) {
+      this.promiseHolder.resolve(_asyncOutput);
     }
-    this.asyncHandle();
+  }
+
+  public run(): void {
+    if (this.promiseHolder.isLiberated) return;
+    // Create timeout error message when needed
+    const timeoutError = new Error(`Error CacheTask timeout: key#`);
+    const task = this.cacher.fetchFn(this.input);
+    this.promiseHolder.resolve(
+      limitTimeout(task, this.cacher.timeoutMillisecond, timeoutError),
+    );
   }
 
   /**
@@ -94,8 +107,12 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    * Removes this cache task from the parent cacher.
    * This effectively deletes the cached entry.
    */
-  public release(): void {
+  private release(): void {
     this.cacher.delete(this.input);
+  }
+
+  private done(): void {
+    this.cacher.consume();
   }
 
   /**
@@ -104,24 +121,39 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    *
    * @private
    */
-  private asyncHandle(): void {
-    this.asyncOutput
+  private setPromiseHandle(): void {
+    this.promiseHolder.promise
       .then((value) => {
         this.usedBytes = sizeof(value);
-        this.resolvedAt = Date.now();
-        this.responseTime = this.resolvedAt - this.fetchStartedAt;
       })
       .catch((error) => {
         this.taskError = error;
-        this.resolvedAt = Date.now();
-        this.responseTime = this.resolvedAt - this.fetchStartedAt;
         if (this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE) {
           // Delay release to avoid immediate cleanup during error handling
           setTimeout(() => {
             this.release();
           }, 0);
         }
+      })
+      .finally(() => {
+        this.resolvedAt = Date.now();
+        this.done();
       });
+  }
+
+  public get isExpired(): boolean {
+    const now = Date.now();
+    if (this.config.expirePolicy === ExpirePolicyType.IDLE) {
+      if (now - this.lastAccessedAt > this.cacher.cacheMillisecond) {
+        return true;
+      }
+    }
+    if (this.config.expirePolicy === ExpirePolicyType.EXPIRE) {
+      if (now - this.resolvedAt > this.cacher.cacheMillisecond) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -135,22 +167,18 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
       this.taskError &&
       this.config.errorTaskPolicy !== ErrorTaskPolicyType.CACHE
     ) {
-      return CacheTaskStatusType.DEPRECATED;
+      return CacheTaskStatusType.FAILED;
+    }
+    if (this.isExpired) {
+      return CacheTaskStatusType.EXPIRED;
+    }
+    if (!this.fetchStartedAt) {
+      return CacheTaskStatusType.QUEUED;
     }
     if (this.resolvedAt) {
-      const now = Date.now();
-      if (this.config.releaseCachePolicy === ReleaseCachePolicyType.IDLE) {
-        if (now - this.lastAccessedAt > this.cacher.cacheMillisecond) {
-          return CacheTaskStatusType.DEPRECATED;
-        }
-      } else {
-        if (now - this.resolvedAt > this.cacher.cacheMillisecond) {
-          return CacheTaskStatusType.DEPRECATED;
-        }
-      }
       return CacheTaskStatusType.ACTIVE;
     }
-    return CacheTaskStatusType.AWAIT;
+    return CacheTaskStatusType.AWAITED;
   }
 
   /**
@@ -160,33 +188,17 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    * @returns A promise that resolves to the cached output value
    * @throws {Error} If the task encountered an error during execution
    */
-  public output(): Promise<OUTPUT> {
+  public async output(): Promise<OUTPUT> {
     this.usedCount++;
     this.lastAccessedAt = Date.now();
     if (this.taskError) {
       throw this.taskError;
     }
-    let task: Promise<OUTPUT> = this.asyncOutput;
+    let task: Promise<OUTPUT> = this.promiseHolder.promise;
     if (this.config.useClones) {
-      task = this.asyncOutput.then((output) => cloneDeep(output));
+      task = task.then((output) => cloneDeep(output));
     }
-
-    // Handle special case where timeout is explicitly set to 0
-    const timeoutMs = this.cacher.timeoutMillisecond;
-    if (timeoutMs === 0) {
-      // Create timeout error message when needed
-      const timeoutError = new Error(
-        `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
-      );
-      throw timeoutError;
-    }
-
-    // Create timeout error message when needed
-    const timeoutError = new Error(
-      `Error CacheTask timeout: key#${this.safeStringify(this.input).substring(0, 100)}${this.safeStringify(this.input).length > 100 ? '...' : ''}`,
-    );
-
-    return limitTimeout(task, this.cacher.timeoutMillisecond, timeoutError);
+    return task;
   }
 
   /**
@@ -196,8 +208,8 @@ export class CacheTask<OUTPUT = any, INPUT = string> {
    * @returns A numeric score representing the value/priority of this cache entry
    */
   public score(): number {
-    const fn: CalcCacheValueMethod =
-      this.config?.releaseMemoryPolicy?.calcCacheValue ||
+    const fn: CalcCacheScoreFn =
+      this.config?.freeUpMemoryPolicy?.calcCacheScoreFn ||
       calcCacheScoreDefaultFn;
     return fn(this.cacher, this as any);
   }
